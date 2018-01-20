@@ -12,7 +12,7 @@ import (
 	// "os/exec"
 )
 
-func redirectorSetup(instance CloudInstance, teamserver string, port string) {
+func redirectorSetup(instance Instance, teamserver string, port string) {
 	sshConfig := &ssh.ClientConfig{
 		User: instance.SSH.Username,
 		Auth: []ssh.AuthMethod{
@@ -23,7 +23,7 @@ func redirectorSetup(instance CloudInstance, teamserver string, port string) {
 	instance.executeCmd("sudo nohup apt-get update &>/dev/null & sudo nohup apt-get -y install socat &>/dev/null & sudo nohup socat TCP4-LISTEN:"+port+",fork TCP4:"+teamserver+":"+port+" &>/dev/null &", sshConfig)
 }
 
-func teamserverSetup(instance *CloudInstance) {
+func teamserverSetup(instance *Instance) {
 	config := instance.Cloud.Config
 	sshConfig := &ssh.ClientConfig{
 		User: instance.SSH.Username,
@@ -59,7 +59,7 @@ func teamserverSetup(instance *CloudInstance) {
 	fmt.Println("Starting teamserver")
 }
 
-func installSSLCert(instance CloudInstance, keystore string) bool {
+func installSSLCert(instance Instance, keystore string) bool {
 	config := instance.Cloud.Config
 	sshConfig := &ssh.ClientConfig{
 		User: instance.SSH.Username,
@@ -126,7 +126,7 @@ func replaceHostHeader(c2File string, domain string) string {
 	return matches
 }
 
-func (instance *CloudInstance) modifyProfile() bool {
+func (instance *Instance) modifyProfile() bool {
 	profileDir := instance.Cloud.Config.CSProfiles
 	c2Profile := (profileDir + "/" + instance.CobaltStrike.C2Profile)
 	b, err := ioutil.ReadFile(c2Profile)

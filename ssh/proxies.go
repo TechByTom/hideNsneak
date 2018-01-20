@@ -1,4 +1,4 @@
-package main
+package ssh
 
 import (
 	"bufio"
@@ -13,13 +13,13 @@ import (
 // func portForwarder() {
 
 // }
-// func (instance CloudInstance) createSingleSOCKS(port string) (error) {
+// func (instance Instance) createSingleSOCKS(port string) (error) {
 
 // 	return err
 // }
 
 //May have to change this back, but it should work
-func (instance *CloudInstance) createSingleSOCKS(port int) {
+func (instance *Instance) createSingleSOCKS(port int) {
 	if !instance.Proxy.SOCKSActive {
 		portString := strconv.Itoa(port)
 		fmt.Println(instance.SSH.Username + " " + instance.Cloud.IPv4)
@@ -43,21 +43,21 @@ func (instance *CloudInstance) createSingleSOCKS(port int) {
 	}
 }
 
-func createMultipleSOCKS(cloudInstances map[int]*CloudInstance, startPort int) (string, string) {
+func createMultipleSOCKS(Instances map[int]*Instance, startPort int) (string, string) {
 	counter := startPort
-	for i := range cloudInstances {
-		cloudInstances[i].createSingleSOCKS(counter)
+	for i := range Instances {
+		Instances[i].createSingleSOCKS(counter)
 		counter = counter + 1
 	}
 
-	proxychains := printProxyChains(cloudInstances)
-	socksd := printSocksd(cloudInstances)
+	proxychains := printProxyChains(Instances)
+	socksd := printSocksd(Instances)
 	return proxychains, socksd
 }
 
-func printProxyChains(cloudInstances map[int]*CloudInstance) string {
+func printProxyChains(Instances map[int]*Instance) string {
 	var proxies string
-	for _, c := range cloudInstances {
+	for _, c := range Instances {
 		if c.SOCKSActive {
 			proxies = proxies + fmt.Sprintf("socks5 127.0.0.1 %s\n", c.SOCKSPort)
 		}
@@ -65,13 +65,13 @@ func printProxyChains(cloudInstances map[int]*CloudInstance) string {
 	return proxies
 }
 
-func printSocksd(cloudInstances map[int]*CloudInstance) string {
+func printSocksd(Instances map[int]*Instance) string {
 	var proxies string
 	proxies = proxies + fmt.Sprintf("\"upstreams\": [\n")
-	for i := range cloudInstances {
-		if cloudInstances[i].SOCKSActive == true {
-			proxies = proxies + fmt.Sprintf("{\"type\": \"socks5\", \"address\": \"127.0.0.1:%s\", \"target\": \"%s\"}", cloudInstances[i].SOCKSPort, cloudInstances[i].IPv4)
-			if i < len(cloudInstances)-1 {
+	for i := range Instances {
+		if Instances[i].SOCKSActive == true {
+			proxies = proxies + fmt.Sprintf("{\"type\": \"socks5\", \"address\": \"127.0.0.1:%s\", \"target\": \"%s\"}", Instances[i].SOCKSPort, Instances[i].IPv4)
+			if i < len(Instances)-1 {
 				proxies = proxies + fmt.Sprintf(",\n")
 			}
 		}

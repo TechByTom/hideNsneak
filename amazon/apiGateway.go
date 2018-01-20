@@ -1,4 +1,4 @@
-package main
+package amazon
 
 import (
 	"encoding/json"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -173,36 +172,31 @@ func verifyVariables(awsID string, awsSecret string, apiName string, url string)
 	return true
 }
 
-func gateway() {
-	awsID := flag.String("id", "", "AWS Access Key ID (Required)")
-	awsSecret := flag.String("secret", "", "AWS API Secret (Required)")
-	region := flag.String("region", "us-east-1", "AWS region to deploy - (Default: us-east-1)")
-	desc := flag.String("description", "API Gateway", "Description of your API - (Default: API Gateway)")
-	apiName := flag.String("api", "", "Name to give your new API (Required)")
-	url := flag.String("url", "", "Target URL (Required)")
-	stageName := flag.String("stage", "test", "Stage name to use (Default: test)")
-	flag.Parse()
-	if verifyVariables(*awsID, *awsSecret, *apiName, *url) {
-		//Create new APIGateway
-		svc := createGateway(*region, *awsID, *awsSecret)
+// func gateway() {
+// 	awsID := flag.String("id", "", "AWS Access Key ID (Required)")
+// 	awsSecret := flag.String("secret", "", "AWS API Secret (Required)")
+// 	region := flag.String("region", "us-east-1", "AWS region to deploy - (Default: us-east-1)")
+// 	desc := flag.String("description", "API Gateway", "Description of your API - (Default: API Gateway)")
+// 	apiName := flag.String("api", "", "Name to give your new API (Required)")
+// 	url := flag.String("url", "", "Target URL (Required)")
+// 	stageName := flag.String("stage", "test", "Stage name to use (Default: test)")
+// 	flag.Parse()
+// 	if verifyVariables(*awsID, *awsSecret, *apiName, *url) {
+// 		//Create new APIGateway
+// 		svc := createGateway(*region, *awsID, *awsSecret)
 
-		//Create New Rest API
-		restAPI := createAPI(svc, *apiName, *desc)
+// 		//Create New Rest API
+// 		restAPI := createAPI(svc, *apiName, *desc)
 
-		//Deploy and Configure Resource
-		apiOutput := deployResource(svc, restAPI, parseURI(*url), *stageName)
-		commandOutput(apiOutput, *url)
+// 		//Deploy and Configure Resource
+// 		apiOutput := deployResource(svc, restAPI, parseURI(*url), *stageName)
+// 		commandOutput(apiOutput, *url)
 
-		log.Println("Please CTRL-C to destroy API Gateway")
-		// Catch CTRL-C and delete droplets.
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		<-c
-		if err := deleteRestAPI(restAPI, svc); err != nil {
-			log.Printf("Could not delete API: %s\n", *restAPI.Id)
-		} else {
-			log.Printf("Deleted API: %s\n", *restAPI.Id)
-		}
+// 		if err := deleteRestAPI(restAPI, svc); err != nil {
+// 			log.Printf("Could not delete API: %s\n", *restAPI.Id)
+// 		} else {
+// 			log.Printf("Deleted API: %s\n", *restAPI.Id)
+// 		}
 
-	}
-}
+// 	}
+// }

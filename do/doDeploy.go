@@ -1,4 +1,4 @@
-package main
+package do
 
 import (
 	"context"
@@ -39,8 +39,8 @@ func importDOKey(pubkey string, clinet *godo.Client) string {
 ////Machine Functions////
 
 //Converts droplets to a Machine struct
-func dropletsToCloudInstances(droplets []godo.Droplet, config Config) []CloudInstance {
-	var cloudInstances []CloudInstance
+func dropletsToInstances(droplets []godo.Droplet, config Config) []Instance {
+	var Instances []Instance
 	for _, drop := range droplets {
 
 		IP, err := drop.PublicIPv4()
@@ -48,7 +48,7 @@ func dropletsToCloudInstances(droplets []godo.Droplet, config Config) []CloudIns
 			log.Fatalf("Unable to get ip address for %s", drop)
 		}
 		privKey := strings.Split(config.PublicKey, ".")
-		cloudInstances = append(cloudInstances, CloudInstance{
+		Instances = append(Instances, Instance{
 			Type:        "DO",
 			ID:          strconv.Itoa(drop.ID),
 			Region:      drop.Region.Slug,
@@ -60,7 +60,7 @@ func dropletsToCloudInstances(droplets []godo.Droplet, config Config) []CloudIns
 			Config:      config,
 		})
 	}
-	return cloudInstances
+	return Instances
 }
 
 /////////////////////////////
@@ -79,7 +79,7 @@ func getDOIP(token string, id int) string {
 	return IP
 }
 
-func destroyDOInstance(instance CloudInstance) {
+func destroyDOInstance(instance Instance) {
 	client := newDOClient(instance.Cloud.IPv4.DO.Token)
 	machineID, err := strconv.Atoi(instance.Cloud.ID)
 	if err != nil {
@@ -192,7 +192,7 @@ func newDropLetMultiCreateRequest(region string, config Config, count int) *godo
 	}
 }
 
-func deployDO(config Config) ([]CloudInstance, int) {
+func deployDO(config Config) ([]Instance, int) {
 	var droplets []godo.Droplet
 	errorResult := 0
 	client := newDOClient(config.DO.Token)
@@ -214,8 +214,8 @@ func deployDO(config Config) ([]CloudInstance, int) {
 		}
 		droplets = append(droplets, drops...)
 	}
-	cloudInstances := dropletsToCloudInstances(droplets, config)
-	return cloudInstances, errorResult
+	Instances := dropletsToInstances(droplets, config)
+	return Instances, errorResult
 }
 
 //List existing droplets
@@ -267,7 +267,7 @@ func createDOFirewall(config Config, firewallName string, ipPortMap map[string][
 }
 
 //Delete Firewall
-func deleteDOFirewall(allInstances map[int]*CloudInstance, config Config, fID string) {
+func deleteDOFirewall(allInstances map[int]*Instance, config Config, fID string) {
 	client := newDOClient(config.DO.Token)
 	_, err := client.Firewalls.Delete(context.TODO(), fID)
 	if err != nil {
@@ -292,7 +292,7 @@ func listAllFirewalls(config Config) []godo.Firewall {
 	return firewallList
 }
 
-func (instance *CloudInstance) listFirewallByDroplet() []godo.Firewall {
+func (instance *Instance) listFirewallByDroplet() []godo.Firewall {
 	client := newDOClient(instance.Cloud.IPv4.DO.Token)
 	instanceID, _ := strconv.Atoi(instance.Cloud.ID)
 	firewallList, _, err := client.Firewalls.ListByDroplet(context.TODO(), instanceID, &godo.ListOptions{
@@ -309,7 +309,7 @@ func (instance *CloudInstance) listFirewallByDroplet() []godo.Firewall {
 //TODO: Add Ability to add/remove firewall rules
 
 //Change firewall belonging to instance
-func (instance *CloudInstance) setDOFirewall(fwID string) {
+func (instance *Instance) setDOFirewall(fwID string) {
 	client := newDOClient(instance.Cloud.IPv4.DO.Token)
 	dropletID, _ := strconv.Atoi(instance.Cloud.ID)
 	_, err := client.Firewalls.AddDroplets(context.TODO(), fwID, dropletID)

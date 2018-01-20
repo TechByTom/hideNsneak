@@ -1,4 +1,4 @@
-package main
+package nmap
 
 import (
 	"bufio"
@@ -97,38 +97,38 @@ func generateIPPortList(targets []string, ports []string) []string {
 }
 
 //This is for splitting up hosts more granualarly for stealthier scans
-func randomizeIPPortsToHosts(cloudInstances map[int]*CloudInstance, ipPortList []string) {
+func randomizeIPPortsToHosts(Instances map[int]*Instance, ipPortList []string) {
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 	for _, i := range r.Perm(len(ipPortList)) {
-		p := i % len(cloudInstances)
+		p := i % len(Instances)
 		splitArray := strings.Split(ipPortList[i], ":")
-		if len(cloudInstances[p].NmapTargets) != 0 {
-			cloudInstances[p].NmapTargets[splitArray[1]] = append(cloudInstances[p].NmapTargets[splitArray[1]], splitArray[0])
+		if len(Instances[p].NmapTargets) != 0 {
+			Instances[p].NmapTargets[splitArray[1]] = append(Instances[p].NmapTargets[splitArray[1]], splitArray[0])
 		} else {
-			cloudInstances[p].NmapTargets = make(map[string][]string)
-			cloudInstances[p].NmapTargets[splitArray[1]] = strings.Split(splitArray[0], "  ")
+			Instances[p].NmapTargets = make(map[string][]string)
+			Instances[p].NmapTargets[splitArray[1]] = strings.Split(splitArray[0], "  ")
 		}
 	}
 }
 
 //This is for splitting up hosts straight up for less stealthy scans
-func splitIPsToHosts(cloudInstances map[int]*CloudInstance, portList []string, ipList []string) {
-	count := len(cloudInstances)
+func splitIPsToHosts(Instances map[int]*Instance, portList []string, ipList []string) {
+	count := len(Instances)
 	splitNum := len(ipList) / count
-	for i := range cloudInstances {
-		cloudInstances[i].NmapTargets = make(map[string][]string)
-		cloudInstances[i].NmapTargets = make(map[string][]string)
+	for i := range Instances {
+		Instances[i].NmapTargets = make(map[string][]string)
+		Instances[i].NmapTargets = make(map[string][]string)
 		for _, port := range portList {
 			if i != count-1 {
-				cloudInstances[i].NmapTargets[port] = ipList[i*splitNum : (i+1)*splitNum]
+				Instances[i].NmapTargets[port] = ipList[i*splitNum : (i+1)*splitNum]
 			} else {
-				cloudInstances[i].NmapTargets[port] = ipList[i*splitNum:]
+				Instances[i].NmapTargets[port] = ipList[i*splitNum:]
 			}
 		}
 	}
 }
 
-// func (instance CloudInstance) parseNmapTargets() (portList []string, ipList []string) {
+// func (instance Instance) parseNmapTargets() (portList []string, ipList []string) {
 // 	for _, ipPort := range instance.Nmap.NmapTargets{
 // 		splitArray := strings.Split(ipPort, ":")
 // 		ipList = removeDuplicateStrings(append(ipList, splitArray[0]))
@@ -137,7 +137,7 @@ func splitIPsToHosts(cloudInstances map[int]*CloudInstance, portList []string, i
 // 	return
 // }
 
-func (instance *CloudInstance) initiateConnectScan(outputFile string, additionOpts string, evasive bool) {
+func (instance *Instance) initiateConnectScan(outputFile string, additionOpts string, evasive bool) {
 	sshConfig := &ssh.ClientConfig{
 		User: instance.SSH.Username,
 		Auth: []ssh.AuthMethod{
@@ -215,13 +215,13 @@ func (instance *CloudInstance) initiateConnectScan(outputFile string, additionOp
 }
 
 //This doesn't work very well
-func checkAllNmapProcesses(cloudInstances map[int]*CloudInstance) {
+func checkAllNmapProcesses(Instances map[int]*Instance) {
 	fmt.Println("See! I checked!")
 	for {
 		oneActive := false
-		for i := range cloudInstances {
-			if cloudInstances[i].NmapActive {
-				cloudInstances[i].checkNmapProcess()
+		for i := range Instances {
+			if Instances[i].NmapActive {
+				Instances[i].checkNmapProcess()
 				oneActive = true
 			}
 		}
@@ -233,7 +233,7 @@ func checkAllNmapProcesses(cloudInstances map[int]*CloudInstance) {
 	}
 }
 
-func (instance *CloudInstance) checkNmapProcess() {
+func (instance *Instance) checkNmapProcess() {
 	sshConfig := &ssh.ClientConfig{
 		User: instance.SSH.Username,
 		Auth: []ssh.AuthMethod{
@@ -257,20 +257,20 @@ func (instance *CloudInstance) checkNmapProcess() {
 }
 
 //TODO: Add an even more evasive option in here that will further limit the IPs scanned on that one address.
-func runConnectScans(cloudInstances map[int]*CloudInstance, output string, additionalOpts string, evasive bool, scope string, ports []string) {
+func runConnectScans(Instances map[int]*Instance, output string, additionalOpts string, evasive bool, scope string, ports []string) {
 	targets := parseIPFile(scope)
 	ipPorts := generateIPPortList(targets, ports)
 	if evasive {
 		fmt.Println("Evasive")
-		randomizeIPPortsToHosts(cloudInstances, ipPorts)
-		for i := 1; i < len(cloudInstances); i++ {
-			go cloudInstances[i].initiateConnectScan(output, additionalOpts, true)
+		randomizeIPPortsToHosts(Instances, ipPorts)
+		for i := 1; i < len(Instances); i++ {
+			go Instances[i].initiateConnectScan(output, additionalOpts, true)
 		}
 	} else {
 		fmt.Println("Less-Evasive")
-		splitIPsToHosts(cloudInstances, ports, targets)
-		// for i := range cloudInstances {
-		// 	 go cloudInstances[i].initiateNmap(output, additionalOpts, false)
+		splitIPsToHosts(Instances, ports, targets)
+		// for i := range Instances {
+		// 	 go Instances[i].initiateNmap(output, additionalOpts, false)
 		// }
 	}
 

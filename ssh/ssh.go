@@ -1,4 +1,4 @@
-package main
+package ssh
 
 import (
 	"bufio"
@@ -12,6 +12,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+//PublicKeyFile reads a filepath to a public key file, parses it and returns it
 func PublicKeyFile(file string) ssh.AuthMethod {
 	buffer, err := ioutil.ReadFile(file)
 	if err != nil {
@@ -27,22 +28,21 @@ func PublicKeyFile(file string) ssh.AuthMethod {
 	return ssh.PublicKeys(key)
 }
 
-func setHomeDirs(allInstances map[int]*CloudInstance) map[int]*CloudInstance {
-	for _, instance := range allInstances {
-		sshConfig := &ssh.ClientConfig{
-			User: instance.SSH.Username,
-			Auth: []ssh.AuthMethod{
-				PublicKeyFile(instance.SSH.PrivateKey),
-			},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		}
-		workingDir := instance.executeCmd("pwd", sshConfig)
-		instance.System.HomeDir = strings.TrimSpace(workingDir)
+//
+func (instance *Instance) setHomeDir() {
+	sshConfig := &ssh.ClientConfig{
+		User: instance.SSH.Username,
+		Auth: []ssh.AuthMethod{
+			PublicKeyFile(instance.SSH.PrivateKey),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	return allInstances
+	workingDir := instance.executeCmd("pwd", sshConfig)
+	instance.System.HomeDir = strings.TrimSpace(workingDir)
+	return
 }
 
-func (instance CloudInstance) scpFileToHost(file string, targetDir string) {
+func (instance *Instance) scpFileToHost(file string, targetDir string) {
 	fmt.Println(instance.SSH.PrivateKey)
 	command := exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-i", instance.SSH.PrivateKey, file, instance.SSH.Username+"@"+instance.Cloud.IPv4+":"+targetDir)
 	if err := command.Run(); err != nil {
@@ -51,7 +51,7 @@ func (instance CloudInstance) scpFileToHost(file string, targetDir string) {
 	}
 }
 
-func (instance CloudInstance) scpFileFromHost(file string, targetDir string) {
+func (instance *Instance) scpFileFromHost(file string, targetDir string) {
 	fmt.Println(instance.SSH.PrivateKey)
 	command := exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-i", instance.SSH.PrivateKey, instance.SSH.Username+"@"+instance.Cloud.IPv4+":"+file, targetDir)
 	if err := command.Run(); err != nil {
@@ -60,7 +60,7 @@ func (instance CloudInstance) scpFileFromHost(file string, targetDir string) {
 	}
 }
 
-func (instance CloudInstance) rsyncDirToHost(dir string, targetDir string) {
+func (instance *Instance) rsyncDirToHost(dir string, targetDir string) {
 	command := exec.Command("rsync", "-azu", "-e", "'ssh", "-o", "StrictHostKeyChecking=no", "-i", instance.SSH.PrivateKey, "-l", instance.SSH.Username+"'", dir, instance.Cloud.IPv4+":"+targetDir)
 	if err := command.Start(); err != nil {
 		fmt.Println("SCPDir failed")
@@ -72,7 +72,7 @@ func printCommand(cmd *exec.Cmd) {
 	fmt.Printf("==> Executing: %s\n", strings.Join(cmd.Args, " "))
 }
 
-func (instance CloudInstance) rsyncDirFromHost(dir string, targetDir string) {
+func (instance *Instance) rsyncDirFromHost(dir string, targetDir string) {
 	rsyncCommand := "rsync -azu -e 'ssh -o StrictHostKeyChecking=no -i " + instance.SSH.PrivateKey + " -l " + instance.SSH.Username + "' " + instance.Cloud.IPv4 + ":" + dir + " " + targetDir
 	command := exec.Command("bash", "-c", rsyncCommand)
 	command.Stderr = os.Stderr
@@ -83,7 +83,7 @@ func (instance CloudInstance) rsyncDirFromHost(dir string, targetDir string) {
 	}
 }
 
-func (instance CloudInstance) shellSystem() {
+func (instance *Instance) shellSystem() {
 	sshConfig := &ssh.ClientConfig{
 		User: instance.SSH.Username,
 		Auth: []ssh.AuthMethod{
@@ -141,7 +141,7 @@ func (instance CloudInstance) shellSystem() {
 	}
 }
 
-func (instance CloudInstance) executeCmd(cmd string, config *ssh.ClientConfig) string {
+func (instance *Instance) executeCmd(cmd string, config *ssh.ClientConfig) string {
 	conn, _ := ssh.Dial("tcp", instance.Cloud.IPv4+":22", config)
 	session, _ := conn.NewSession()
 	defer session.Close()
@@ -153,7 +153,7 @@ func (instance CloudInstance) executeCmd(cmd string, config *ssh.ClientConfig) s
 	return stdoutBuf.String()
 }
 
-func (instance CloudInstance) executeBackgroundCmd(cmd string, config *ssh.ClientConfig) string {
+func (instance *Instance) executeBackgroundCmd(cmd string, config *ssh.ClientConfig) string {
 	conn, _ := ssh.Dial("tcp", instance.Cloud.IPv4+":22", config)
 	session, _ := conn.NewSession()
 	defer session.Close()
