@@ -1,0 +1,16 @@
+PublicKey:  "/Users/mike.hodges/.ssh/do_rsa.pub"
+AWS:
+    secret: ""
+    accessID: ""
+    regions: "us-east-1,us-east-2"
+    imageIDs: "ami-d05e75b8,ami-336b4456"
+    type: "t2.micro"
+    number: 5
+DO:
+    token: ""
+    regions: "*"
+    type: "ubuntu-14-04-x64"
+    memory: "512mb"
+    name: "test"
+    number: 6
+    
