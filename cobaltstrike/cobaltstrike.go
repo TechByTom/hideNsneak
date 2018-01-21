@@ -8,68 +8,67 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/rmikehodges/SneakyVulture/sshext"
 	"golang.org/x/crypto/ssh"
 	// "os/exec"
-	ssh-etf "github.com/rmikehodges/SneakyVulture/ssh"
 )
 
-func redirectorSetup(privateKey string, teamserver string, port string, username string) {
+func redirectorSetup(privateKey string, ipv4 string, teamserver string, port string, username string) {
 	sshConfig := &ssh.ClientConfig{
 		User: username,
 		Auth: []ssh.AuthMethod{
-			PublicKeyFile(privateKey),
+			sshext.PublicKeyFile(privateKey),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	ssh.ExecuteCmd(`sudo nohup apt-get update &>/dev/null & sudo nohup apt-get -y install socat 
+	sshext.ExecuteCmd(`sudo nohup apt-get update &>/dev/null & sudo nohup apt-get -y install socat 
 		&>/dev/null & sudo nohup socat TCP4-LISTEN:`+port+`
-		,fork TCP4:`+teamserver+`:`+port+` &>/dev/null &`, sshConfig)
+		,fork TCP4:`+teamserver+`:`+port+` &>/dev/null &`, ipv4, sshConfig)
 }
-func teamserverSetup(privateKey string, homeDir string, csdir string, homedir string, csprofiles string) {
-	config := instance.Cloud.Config
+func teamserverSetup(privateKey string, ipv4 string, username string, homeDir string, csdir string, homedir string, csprofiles string, cslicense string, cspassword string, killdate string, c2profile string) bool {
 	sshConfig := &ssh.ClientConfig{
 		User: username,
 		Auth: []ssh.AuthMethod{
-			PublicKeyFile(privateKey),
+			sshext.PublicKeyFile(privateKey),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	instance.ExecuteCmd(`sudo apt-get update;
+	sshext.ExecuteCmd(`sudo apt-get update;
 		sudo apt-get install -y python-software-properties debconf-utils;
 		sudo add-apt-repository -y ppa:webupd8team/java;
 		sudo apt-get update;
 		echo "oracle-java8-installer shared/accepted-oracle-license-v1-1 select true" | sudo debconf-set-selections;
 		sudo apt-get install --no-install-recommends -y oracle-java8-installer ca-certificates;
-		`, sshConfig)
+		`, ipv4, sshConfig)
 
 	fmt.Println("Successfully installed Oracle Java")
 
 	//TODO Change these home directories
-	instance.RsyncDirToHost(csdir, homedir)
+	sshext.RsyncDirToHost(csdir, homedir, username, ipv4, privateKey)
 	fmt.Println("Copied CS")
-	instance.RsyncDirToHost(csprofiles, homedir)
+	sshext.RsyncDirToHost(csprofiles, homedir, username, ipv4, privateKey)
 	fmt.Println("Copied Profiles")
 
-	fmt.Println(ssh.ExecuteCmd("cd "+homedir+"/"+path.Base(csdir)+" && echo "+cslicense+" | ./update", sshConfig))
+	fmt.Println(sshext.ExecuteCmd("cd "+homedir+"/"+path.Base(csdir)+" && echo "+cslicense+" | ./update", ipv4, sshConfig))
 
 	cmd := (`cd ` + homedir + `/` + path.Base(csdir) + ` && sudo ./teamserver ` + ipv4 + ` 
-	` + instance.CobaltStrike.CSPassword + ` ` + homedir + `/` + path.Base(csprofiles) + `/
-	` + c2profile + ` ` + instance.CobaltStrike.KillDate)
-	ssh.ExecuteBackgroundCmd(cmd, sshConfig)
-	instance.CobaltStrike.TeamserverEnabled = true
+	` + cspassword + ` ` + homedir + `/` + path.Base(csprofiles) + `/
+	` + c2profile + ` ` + killdate)
+	sshext.ExecuteBackgroundCmd(cmd, ipv4, sshConfig)
 	fmt.Println("Starting teamserver")
+	return true
 }
 
-func installSSLCert(username string, domain string, certLocation string, sslKeyPass string, csdir string, privateKey string, keystore string) bool {
+func installSSLCert(username string, ipv4 string, domain string, certLocation string, sslKeyPass string, csdir string, privateKey string, keystore string) bool {
 	sshConfig := &ssh.ClientConfig{
 		User: username,
 		Auth: []ssh.AuthMethod{
-			PublicKeyFile(privateKey),
+			sshext.PublicKeyFile(privateKey),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	if !(len(instance.executeCmd("which keytool", sshConfig)) > 7) {
+	if !(len(sshext.ExecuteCmd("which keytool", ipv4, sshConfig)) > 7) {
 		//Log here
 		fmt.Println("keytool not in path on the target machine, check if java is installed")
 		return false
@@ -83,10 +82,10 @@ func installSSLCert(username string, domain string, certLocation string, sslKeyP
 	  -alias ` + domain
 
 	//Log this command
-	instance.executeCmd(sslCommand, sshConfig)
+	sshext.ExecuteCmd(sslCommand, ipv4, sshConfig)
 
-	if (len(instance.executeCmd("find . -maxdepth 1 -name "+domain+".store", sshConfig))) > 5 {
-		instance.executeCmd("mkdir "+csdir+"/ssl && cp "+domain+".store "+csdir+"/ssl/", sshConfig)
+	if (len(sshext.ExecuteCmd("find . -maxdepth 1 -name "+domain+".store", ipv4, sshConfig))) > 5 {
+		sshext.ExecuteCmd("mkdir "+csdir+"/ssl && cp "+domain+".store "+csdir+"/ssl/", ipv4, sshConfig)
 
 	} else {
 		//Log Here
@@ -127,14 +126,14 @@ func replaceHostHeader(c2File string, domain string) string {
 	return matches
 }
 
-func modifyProfile(ipv4 string, csProfileDir string, c2profile string, domainFrontURL string, sslKeyPass string) bool {
+func modifyProfile(ipv4 string, csProfileDir string, c2profile string, domain string, domainFrontURL string, sslKeyPass string, ssl bool) (string, bool) {
 	profileDir := csProfileDir
 	c2Profile := (profileDir + "/" + c2profile)
 	b, err := ioutil.ReadFile(c2Profile)
 	if err != nil {
 		//Log here
 		fmt.Println("Unable to read your C2 Profile. Make sure its in your defined profiles directory")
-		return false
+		return "", false
 	}
 	//This may change in the future so keep an eye on it
 	problemHeaders := [...]string{"Accept-Encoding", "Connection", "Keep-Alive", "Proxy-Authorization", "TE", "Trailer", "Transfer-Encoding"}
@@ -142,10 +141,10 @@ func modifyProfile(ipv4 string, csProfileDir string, c2profile string, domainFro
 
 	output := replaceHostHeader(string(b), domainFrontURL)
 
-	if strings.Contains(domainFrontUrl, "appspot") {
+	if strings.Contains(domainFrontURL, "appspot") {
 		output = removeHeaders(output, headerSlice)
 	}
-	if instance.SSL.SSLEnabled {
+	if ssl {
 		output = fixSSLCert(output, "ssl/"+domain+".store", sslKeyPass)
 	}
 	newProfile := profileDir + "/" + ipv4 + "-" + c2profile
@@ -153,8 +152,8 @@ func modifyProfile(ipv4 string, csProfileDir string, c2profile string, domainFro
 	if err != nil {
 		//log here
 		fmt.Println("Unable to write to new profile, using old profile")
-	} else {
-		c2profile = newProfile
+		return "", false
 	}
-	return true
+
+	return newProfile, true
 }

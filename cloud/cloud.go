@@ -15,7 +15,8 @@ import (
 	"github.com/digitalocean/godo"
 	"github.com/rmikehodges/SneakyVulture/amazon"
 	"github.com/rmikehodges/SneakyVulture/do"
-	"github.com/rmikehodges/SneakyVulture/ssh"
+	"github.com/rmikehodges/SneakyVulture/nmap"
+	"github.com/rmikehodges/SneakyVulture/sshext"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -287,7 +288,7 @@ func createMultipleSOCKS(Instances map[int]*Instance, startPort int, config Conf
 	socksConf := make(map[int]string)
 	counter := startPort
 	for _, instance := range Instances {
-		instance.Proxy.SOCKSActive = ssh.CreateSingleSOCKS(instance.SSH.PrivateKey, instance.SSH.Username, instance.Cloud.IPv4, counter)
+		instance.Proxy.SOCKSActive = sshext.CreateSingleSOCKS(instance.SSH.PrivateKey, instance.SSH.Username, instance.Cloud.IPv4, counter)
 		if instance.Proxy.SOCKSActive {
 			instance.Proxy.SOCKSPort = strconv.Itoa(counter)
 			socksConf[counter] = instance.Cloud.IPv4
@@ -296,7 +297,49 @@ func createMultipleSOCKS(Instances map[int]*Instance, startPort int, config Conf
 
 	}
 
-	proxychains := ssh.PrintProxyChains(socksConf)
-	socksd := ssh.PrintSocksd(socksConf)
+	proxychains := sshext.PrintProxyChains(socksConf)
+	socksd := sshext.PrintSocksd(socksConf)
 	return proxychains, socksd
 }
+
+//Nmap Helpers//
+//TODO: Add an even more evasive option in here that will further limit the IPs scanned on that one address.
+func RunConnectScans(instances []*Instance, output string, additionalOpts string, evasive bool, scope string, ports []string) {
+	targets := nmap.ParseIPFile(scope)
+	ipPorts := nmap.GenerateIPPortList(targets, ports)
+	if evasive {
+		fmt.Println("Evasive")
+		nmapTargeting := nmap.RandomizeIPPortsToHosts(len(instances), ipPorts)
+		for i, instance := range instances {
+			go nmap.InitiateConnectScan(instance.SSH.Username, instance.Cloud.IPv4, instance.SSH.PrivateKey, nmapTargeting[i],
+				instance.System.HomeDir, instance.System.HomeDir+"/nmap-"+instance.Cloud.IPv4, strings.Join(ports, "-"), additionalOpts,
+				evasive)
+		}
+	}
+	// else {
+	// 	fmt.Println("Less-Evasive")
+	// 	splitIPsToHosts(Instances, ports, targets)
+	// 	// for i := range Instances {
+	// 	// 	 go Instances[i].initiateNmap(output, additionalOpts, false)
+	// 	// }
+	// }
+}
+
+// //This doesn't work very well
+// func CheckAllNmapProcesses(ipv4 string, username string, privateKey string, nmapCmd string) {
+// 	fmt.Println("See! I checked!")
+// 	for {
+// 		oneActive := false
+// 		for i := range Instances {
+// 			if Instances[i].NmapActive {
+// 				Instances[i].checkNmapProcess()
+// 				oneActive = true
+// 			}
+// 		}
+
+// 		if !oneActive {
+// 			fmt.Println("/////////////////////////No Nmap Running////////////////////")
+// 		}
+// 		time.Sleep(30 * time.Second)
+// 	}
+// }

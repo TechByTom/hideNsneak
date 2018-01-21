@@ -1,4 +1,11 @@
-package main
+package google
+
+import (
+	"fmt"
+	"io/ioutil"
+	"regexp"
+	"strings"
+)
 
 //Removed Headers
 // Accept-Encoding
@@ -9,7 +16,7 @@ package main
 // Trailer
 // // Transfer-Encoding
 
-func main() {
+func parse() {
 	b, err := ioutil.ReadFile("/Users/mike.hodges/Tools/cobalt-strike-profiles/gmail.profile")
 	if err != nil {
 		panic(err)
@@ -19,7 +26,6 @@ func main() {
 	fmt.Printf(matches[0])
 	re = regexp.MustCompile(`\n.*"Accept-Encoding".*\n`)
 	matches = re.FindStringSubmatch(string(b))
-	matches[0], " ")
 	fmt.Println(strings.Split(matches[0], " "))
 	// re = regexp.MustCompile(`(?s)http-post\ \{.*`)
 	// matches = re.FindStringSubmatch(string(b))

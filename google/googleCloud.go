@@ -53,7 +53,8 @@ func generateC2Profile(c2profile string, c2out string) bool {
 	return true
 }
 
-func createClient(projectID string, RestrictedUA string, RestrictedSubnet string, RestrictedHeader string, DefaultRedirect string, C2Url string) bool {
+func createClient(projectID string, RestrictedUA string, RestrictedSubnet string, RestrictedHeader string,
+	DefaultRedirect string, C2Url string, goSource string, fileOut string) bool {
 	redirector := RedirectorSource{
 		RestrictedUA:     RestrictedUA,
 		RestrictedSubnet: RestrictedSubnet,
@@ -61,6 +62,8 @@ func createClient(projectID string, RestrictedUA string, RestrictedSubnet string
 		DefaultRedirect:  DefaultRedirect,
 		C2Url:            C2Url,
 	}
-
+	if !generateSource(goSource, fileOut, redirector) {
+		return false
+	}
 	return true
 }

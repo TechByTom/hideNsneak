@@ -34,7 +34,7 @@ func inc(ip net.IP) {
 	}
 }
 
-func parseIPFile(path string) []string {
+func ParseIPFile(path string) []string {
 	var ipList []string
 	var cidrList []string
 	var endNum int
@@ -83,7 +83,7 @@ func normalizeTargets(targets []string) string {
 	return strings.Join(targets, " ")
 }
 
-func generateIPPortList(targets []string, ports []string) []string {
+func GenerateIPPortList(targets []string, ports []string) []string {
 	var ipPortList []string
 	for _, port := range ports {
 		for _, ip := range targets {
@@ -94,55 +94,40 @@ func generateIPPortList(targets []string, ports []string) []string {
 }
 
 //This is for splitting up hosts more granualarly for stealthier scans
-func randomizeIPPortsToHosts(scannerCount int, ipPortList []string) {
+func RandomizeIPPortsToHosts(scannerCount int, ipPortList []string) map[int]map[int][]string {
 	nmapTargeting := make(map[int]map[int][]string)
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 	for _, i := range r.Perm(len(ipPortList)) {
 		p := i % scannerCount
 		splitArray := strings.Split(ipPortList[i], ":")
-		port := splitArray[1]
+		port, _ := strconv.Atoi(splitArray[1])
 		targetIP := splitArray[0]
 		if len(nmapTargeting[p][port]) != 0 {
-			Instances[p].NmapTargets[port] = append(Instances[p].NmapTargets[port], targetIP)
+			nmapTargeting[p][port] = append(nmapTargeting[p][port], targetIP)
 		} else {
-			Instances[p].NmapTargets = make(map[string][]string)
-			Instances[p].NmapTargets[port] = strings.Split(targetIP, "  ")
+			nmapTargeting[p] = make(map[int][]string)
+			nmapTargeting[p][port] = strings.Split(targetIP, "  ")
 		}
 	}
 	return nmapTargeting
 }
 
-//This is for splitting up hosts more granualarly for stealthier scans
-func randomizeIPPortsToHosts(Instances map[int]*Instance, ipPortList []string) {
-	r := rand.New(rand.NewSource(time.Now().Unix()))
-	for _, i := range r.Perm(len(ipPortList)) {
-		p := i % len(Instances)
-		splitArray := strings.Split(ipPortList[i], ":")
-		if len(Instances[p].NmapTargets) != 0 {
-			Instances[p].NmapTargets[splitArray[1]] = append(Instances[p].NmapTargets[splitArray[1]], splitArray[0])
-		} else {
-			Instances[p].NmapTargets = make(map[string][]string)
-			Instances[p].NmapTargets[splitArray[1]] = strings.Split(splitArray[0], "  ")
-		}
-	}
-}
-
 //This is for splitting up hosts straight up for less stealthy scans
-func splitIPsToHosts(Instances map[int]*Instance, portList []string, ipList []string) {
-	count := len(Instances)
-	splitNum := len(ipList) / count
-	for i := range Instances {
-		Instances[i].NmapTargets = make(map[string][]string)
-		Instances[i].NmapTargets = make(map[string][]string)
-		for _, port := range portList {
-			if i != count-1 {
-				Instances[i].NmapTargets[port] = ipList[i*splitNum : (i+1)*splitNum]
-			} else {
-				Instances[i].NmapTargets[port] = ipList[i*splitNum:]
-			}
-		}
-	}
-}
+// func splitIPsToHosts(Instances map[int]*Instance, portList []string, ipList []string) {
+// 	count := len(Instances)
+// 	splitNum := len(ipList) / count
+// 	for i := range Instances {
+// 		Instances[i].NmapTargets = make(map[string][]string)
+// 		Instances[i].NmapTargets = make(map[string][]string)
+// 		for _, port := range portList {
+// 			if i != count-1 {
+// 				Instances[i].NmapTargets[port] = ipList[i*splitNum : (i+1)*splitNum]
+// 			} else {
+// 				Instances[i].NmapTargets[port] = ipList[i*splitNum:]
+// 			}
+// 		}
+// 	}
+// }
 
 // func (instance Instance) parseNmapTargets() (portList []string, ipList []string) {
 // 	for _, ipPort := range instance.Nmap.NmapTargets{

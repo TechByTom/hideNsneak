@@ -80,29 +80,13 @@ func main() {
 	allInstances = stopInstances(config, allInstances)
 }
 
-//SORTED TODO:
-//1. Import existing systems into Instances
-//2. Add Google App Engine Domain Fronting
-//3. Add Azure Domain Frontings
-//3. Implement User Agent Restrictions to domain fronting
-//3. Centralized Logging
-//4. Implement Google App Engine Domain Fronting
-//5. Implment Drone-nmap
-//6. Add ability to stop/start google and AWS systems
-//7. Add Google compute cloud instances
-//8. Finish security groups, DO firewall, Google firewall
-
-//TODO
-//2.  Add Support for LetsEncrypt
-//10. Add ability to stop EC2 instances to preserve data
-//11. Add ability to connect back to started machines that weren't terminated
-//12. Add automatic drone-nmap functionality
-//		--if-error, save file name, continue, and then redo the errors
-//13. Add ability scale back nmap scans and queue them for later, bring down hosts, and stand new ones up for scanning
-//14. Implement Google Firewall, Domain Fronting, and Compute Engine
-//15. Add Security Restrictions to Domain Fronting on compute engine and AWS
-
-//NOTES
-//1. Partially implemented functionality for EC2 security groups
-//2. Implement evasice scanning method that will scan a portion of the ports --> bring down the host --> resume scanning with a new host
-//3. By default, teamservers are deployed to EC2/Google instances as they can be stopped without losing their storage, thus preserving important artifacts
+//Priorities:
+// 1. Finish Google Domain Fronting Automation
+// 2. Finish Security Groups and Firewalls for DO/AWS
+// 3. Finish Cloudfronting
+// 4. Add ability to stop/start EC2 instances
+// 5. Add ability to import existing instances
+// 6. Auto Drone-nmap on retrieval
+// 7. Interface
+// 8. Log all the things
+// 9. Add more cloud providers
