@@ -1,4 +1,4 @@
-package main
+package cobaltstrike
 
 import (
 	// "os"
@@ -10,30 +10,32 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	// "os/exec"
+	ssh-etf "github.com/rmikehodges/SneakyVulture/ssh"
 )
 
-func redirectorSetup(instance Instance, teamserver string, port string) {
+func redirectorSetup(privateKey string, teamserver string, port string, username string) {
 	sshConfig := &ssh.ClientConfig{
-		User: instance.SSH.Username,
+		User: username,
 		Auth: []ssh.AuthMethod{
-			PublicKeyFile(instance.SSH.PrivateKey),
+			PublicKeyFile(privateKey),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	instance.executeCmd("sudo nohup apt-get update &>/dev/null & sudo nohup apt-get -y install socat &>/dev/null & sudo nohup socat TCP4-LISTEN:"+port+",fork TCP4:"+teamserver+":"+port+" &>/dev/null &", sshConfig)
+	ssh.ExecuteCmd(`sudo nohup apt-get update &>/dev/null & sudo nohup apt-get -y install socat 
+		&>/dev/null & sudo nohup socat TCP4-LISTEN:`+port+`
+		,fork TCP4:`+teamserver+`:`+port+` &>/dev/null &`, sshConfig)
 }
-
-func teamserverSetup(instance *Instance) {
+func teamserverSetup(privateKey string, homeDir string, csdir string, homedir string, csprofiles string) {
 	config := instance.Cloud.Config
 	sshConfig := &ssh.ClientConfig{
-		User: instance.SSH.Username,
+		User: username,
 		Auth: []ssh.AuthMethod{
-			PublicKeyFile(instance.SSH.PrivateKey),
+			PublicKeyFile(privateKey),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	instance.executeCmd(`sudo apt-get update;
+	instance.ExecuteCmd(`sudo apt-get update;
 		sudo apt-get install -y python-software-properties debconf-utils;
 		sudo add-apt-repository -y ppa:webupd8team/java;
 		sudo apt-get update;
@@ -44,27 +46,26 @@ func teamserverSetup(instance *Instance) {
 	fmt.Println("Successfully installed Oracle Java")
 
 	//TODO Change these home directories
-	instance.rsyncDirToHost(config.CSDir, instance.System.HomeDir)
+	instance.RsyncDirToHost(csdir, homedir)
 	fmt.Println("Copied CS")
-	instance.rsyncDirToHost(config.CSProfiles, instance.System.HomeDir)
+	instance.RsyncDirToHost(csprofiles, homedir)
 	fmt.Println("Copied Profiles")
 
-	fmt.Println(instance.executeCmd("cd "+instance.System.HomeDir+"/"+path.Base(config.CSDir)+" && echo "+config.CSLicense+" | ./update", sshConfig))
+	fmt.Println(ssh.ExecuteCmd("cd "+homedir+"/"+path.Base(csdir)+" && echo "+cslicense+" | ./update", sshConfig))
 
-	cmd := (`cd ` + instance.System.HomeDir + `/` + path.Base(config.CSDir) + ` && sudo ./teamserver ` + instance.Cloud.IPv4 + ` 
-	` + instance.CobaltStrike.CSPassword + ` ` + instance.System.HomeDir + `/` + path.Base(config.CSProfiles) + `/
-	` + instance.CobaltStrike.C2Profile + ` ` + instance.CobaltStrike.KillDate)
-	instance.executeBackgroundCmd(cmd, sshConfig)
+	cmd := (`cd ` + homedir + `/` + path.Base(csdir) + ` && sudo ./teamserver ` + ipv4 + ` 
+	` + instance.CobaltStrike.CSPassword + ` ` + homedir + `/` + path.Base(csprofiles) + `/
+	` + c2profile + ` ` + instance.CobaltStrike.KillDate)
+	ssh.ExecuteBackgroundCmd(cmd, sshConfig)
 	instance.CobaltStrike.TeamserverEnabled = true
 	fmt.Println("Starting teamserver")
 }
 
-func installSSLCert(instance Instance, keystore string) bool {
-	config := instance.Cloud.Config
+func installSSLCert(username string, domain string, certLocation string, sslKeyPass string, csdir string, privateKey string, keystore string) bool {
 	sshConfig := &ssh.ClientConfig{
-		User: instance.SSH.Username,
+		User: username,
 		Auth: []ssh.AuthMethod{
-			PublicKeyFile(instance.SSH.PrivateKey),
+			PublicKeyFile(privateKey),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
@@ -74,18 +75,18 @@ func installSSLCert(instance Instance, keystore string) bool {
 		return false
 	}
 
-	sslCommand := `openssl pkcs12 -export -in ` + instance.SSL.CertLocation + `/fullchain.pem 
-	-inkey ` + instance.SSL.CertLocation + `privkey.pem -out ` + instance.Cloud.Domain + `.pkcs -name ` + instance.Cloud.Domain + ` 
-	-passout ` + instance.SSL.SSLKeyPass + `&& keytool -importkeystore -destskeystorepass ` + instance.SSL.SSLKeyPass + `
-	 -destkeypass ` + instance.SSL.SSLKeyPass + ` -destkeystore ` + instance.Cloud.Domain + `.store -srckeystore
-	  ` + instance.Cloud.Domain + `.pkcs -srcstoretype PKCS12 -srcstorepass ` + instance.SSL.SSLKeyPass + ` 
-	  -alias ` + instance.Cloud.Domain
+	sslCommand := `openssl pkcs12 -export -in ` + certLocation + `/fullchain.pem 
+	-inkey ` + certLocation + `privkey.pem -out ` + domain + `.pkcs -name ` + domain + ` 
+	-passout ` + sslKeyPass + `&& keytool -importkeystore -destskeystorepass ` + sslKeyPass + `
+	 -destkeypass ` + sslKeyPass + ` -destkeystore ` + domain + `.store -srckeystore
+	  ` + domain + `.pkcs -srcstoretype PKCS12 -srcstorepass ` + sslKeyPass + ` 
+	  -alias ` + domain
 
 	//Log this command
 	instance.executeCmd(sslCommand, sshConfig)
 
-	if (len(instance.executeCmd("find . -maxdepth 1 -name "+instance.Cloud.Domain+".store", sshConfig))) > 5 {
-		instance.executeCmd("mkdir "+instance.Cloud.Config.CSDir+"/ssl && cp "+instance.Cloud.Domain+".store "+instance.Cloud.Config.CSDir+"/ssl/", sshConfig)
+	if (len(instance.executeCmd("find . -maxdepth 1 -name "+domain+".store", sshConfig))) > 5 {
+		instance.executeCmd("mkdir "+csdir+"/ssl && cp "+domain+".store "+csdir+"/ssl/", sshConfig)
 
 	} else {
 		//Log Here
@@ -126,9 +127,9 @@ func replaceHostHeader(c2File string, domain string) string {
 	return matches
 }
 
-func (instance *Instance) modifyProfile() bool {
-	profileDir := instance.Cloud.Config.CSProfiles
-	c2Profile := (profileDir + "/" + instance.CobaltStrike.C2Profile)
+func modifyProfile(ipv4 string, csProfileDir string, c2profile string, domainFrontURL string, sslKeyPass string) bool {
+	profileDir := csProfileDir
+	c2Profile := (profileDir + "/" + c2profile)
 	b, err := ioutil.ReadFile(c2Profile)
 	if err != nil {
 		//Log here
@@ -139,21 +140,21 @@ func (instance *Instance) modifyProfile() bool {
 	problemHeaders := [...]string{"Accept-Encoding", "Connection", "Keep-Alive", "Proxy-Authorization", "TE", "Trailer", "Transfer-Encoding"}
 	headerSlice := problemHeaders[:]
 
-	output := replaceHostHeader(string(b), instance.DomainFront.DomainFrontURL)
+	output := replaceHostHeader(string(b), domainFrontURL)
 
-	if strings.Contains(instance.DomainFront.DomainFrontURL, "appspot") {
+	if strings.Contains(domainFrontUrl, "appspot") {
 		output = removeHeaders(output, headerSlice)
 	}
 	if instance.SSL.SSLEnabled {
-		output = fixSSLCert(output, "ssl/"+instance.Cloud.Domain+".store", instance.SSL.SSLKeyPass)
+		output = fixSSLCert(output, "ssl/"+domain+".store", sslKeyPass)
 	}
-	newProfile := profileDir + "/" + instance.Cloud.IPv4 + "-" + instance.CobaltStrike.C2Profile
+	newProfile := profileDir + "/" + ipv4 + "-" + c2profile
 	err = ioutil.WriteFile(newProfile, []byte(output), 0644)
 	if err != nil {
 		//log here
 		fmt.Println("Unable to write to new profile, using old profile")
 	} else {
-		instance.CobaltStrike.C2Profile = newProfile
+		c2profile = newProfile
 	}
 	return true
 }

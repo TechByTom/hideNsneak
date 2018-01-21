@@ -15,6 +15,7 @@ import (
 	"github.com/digitalocean/godo"
 	"github.com/rmikehodges/SneakyVulture/amazon"
 	"github.com/rmikehodges/SneakyVulture/do"
+	"github.com/rmikehodges/SneakyVulture/ssh"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -257,19 +258,20 @@ func startInstances(config Config) (map[int]*Instance, map[string][]string) {
 	var allInstances []Instance
 	var cloudInstances []Instance
 	var mappedInstances map[int]*Instance
+	var terminationMap map[string][]string
+	var ec2Instances []*ec2.Instance
 	if config.AWS.Number > 0 {
-		ec2Instances, terminationMap := amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID, splitOnComma(config.AWS.Regions), splitOnComma(config.AWS.ImageIDs), config.AWS.Number, config.PublicKey, config.AWS.Type)
-		cloudInstances := ec2ToInstance(ec2Instances)
+		ec2Instances, terminationMap = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID, splitOnComma(config.AWS.Regions), splitOnComma(config.AWS.ImageIDs), config.AWS.Number, config.PublicKey, config.AWS.Type)
+		cloudInstances = ec2ToInstance(ec2Instances)
 		allInstances = append(allInstances, cloudInstances...)
+	}
 	if config.DO.Number > 0 {
 		doInstances := do.DeployDO(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug, config.DO.Fingerprint, config.DO.Number, config.DO.Name)
-		cloudInstances := dropletsToInstances(doInstances, config)
+		cloudInstances = dropletsToInstances(doInstances, config)
 		allInstances = append(allInstances, cloudInstances...)
-	if config.AWS.Number > 0 || config.DO.Number > 0 {
+	}
+	if len(allInstances) > 0 {
 		mappedInstances = combineToMap(allInstances)
-		if ec2Result == 1 || doResult == 1 {
-			stopInstances(config, mappedInstances)
-		}
 		fmt.Println("Waiting a few seconds for all instances to initialize...")
 		time.Sleep(60 * time.Second)
 		getIPAddresses(mappedInstances, config)
@@ -278,4 +280,23 @@ func startInstances(config Config) (map[int]*Instance, map[string][]string) {
 		}
 	}
 	return mappedInstances, terminationMap
+}
+
+//Proxies//
+func createMultipleSOCKS(Instances map[int]*Instance, startPort int, config Config) (string, string) {
+	socksConf := make(map[int]string)
+	counter := startPort
+	for _, instance := range Instances {
+		instance.Proxy.SOCKSActive = ssh.CreateSingleSOCKS(instance.SSH.PrivateKey, instance.SSH.Username, instance.Cloud.IPv4, counter)
+		if instance.Proxy.SOCKSActive {
+			instance.Proxy.SOCKSPort = strconv.Itoa(counter)
+			socksConf[counter] = instance.Cloud.IPv4
+			counter = counter + 1
+		}
+
+	}
+
+	proxychains := ssh.PrintProxyChains(socksConf)
+	socksd := ssh.PrintSocksd(socksConf)
+	return proxychains, socksd
 }

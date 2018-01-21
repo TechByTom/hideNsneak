@@ -1,7 +1,6 @@
 package ssh
 
 import (
-	"bufio"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -19,62 +18,28 @@ import (
 // }
 
 //May have to change this back, but it should work
-func (instance *Instance) createSingleSOCKS(port int) {
-	if !instance.Proxy.SOCKSActive {
-		portString := strconv.Itoa(port)
-		fmt.Println(instance.SSH.Username + " " + instance.Cloud.IPv4)
-		instance.System.CMD = exec.Command("ssh", "-N", "-D", portString, "-o", "StrictHostKeyChecking=no", "-i", instance.SSH.PrivateKey, fmt.Sprintf(instance.SSH.Username+"@%s", instance.Cloud.IPv4))
-		stderr, err := instance.System.CMD.StderrPipe()
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(instance.System.CMD)
-		instance.System.Stderr = bufio.NewReader(stderr)
-		if err := instance.System.CMD.Start(); err != nil {
-			fmt.Println(err)
-		}
-		instance.Proxy.SOCKSActive = true
-		instance.SOCKSPort = portString
-		fmt.Println("Single")
-		fmt.Println(instance)
-		if err != nil {
-			fmt.Println("Socks Proxy Could not be created")
-		}
+func CreateSingleSOCKS(privateKey string, username string, ipv4 string, port int) bool {
+	portString := strconv.Itoa(port)
+	cmd := exec.Command("ssh", "-N", "-D", portString, "-o", "StrictHostKeyChecking=no", "-i", privateKey, fmt.Sprintf(username+"@%s", ipv4))
+	if err := cmd.Start(); err != nil {
+		fmt.Println(err)
+		return false
 	}
+	return true
 }
 
-func createMultipleSOCKS(Instances map[int]*Instance, startPort int) (string, string) {
-	counter := startPort
-	for i := range Instances {
-		Instances[i].createSingleSOCKS(counter)
-		counter = counter + 1
-	}
-
-	proxychains := printProxyChains(Instances)
-	socksd := printSocksd(Instances)
-	return proxychains, socksd
-}
-
-func printProxyChains(Instances map[int]*Instance) string {
+func PrintProxyChains(socksConf map[int]string) string {
 	var proxies string
-	for _, c := range Instances {
-		if c.SOCKSActive {
-			proxies = proxies + fmt.Sprintf("socks5 127.0.0.1 %s\n", c.SOCKSPort)
-		}
+	for port := range socksConf {
+		proxies = proxies + fmt.Sprintf("socks5 127.0.0.1 %d\n", port)
 	}
 	return proxies
 }
 
-func printSocksd(Instances map[int]*Instance) string {
-	var proxies string
-	proxies = proxies + fmt.Sprintf("\"upstreams\": [\n")
-	for i := range Instances {
-		if Instances[i].SOCKSActive == true {
-			proxies = proxies + fmt.Sprintf("{\"type\": \"socks5\", \"address\": \"127.0.0.1:%s\", \"target\": \"%s\"}", Instances[i].SOCKSPort, Instances[i].IPv4)
-			if i < len(Instances)-1 {
-				proxies = proxies + fmt.Sprintf(",\n")
-			}
-		}
+func PrintSocksd(socksConf map[int]string) string {
+	proxies := fmt.Sprintf("\"upstreams\": [\n")
+	for port, ip := range socksConf {
+		proxies = proxies + fmt.Sprintf("{\"type\": \"socks5\", \"address\": \"127.0.0.1:%d\", \"target\": \"%s\"}", port, ip)
 	}
 	proxies = proxies + fmt.Sprintf("\n]\n")
 	return proxies

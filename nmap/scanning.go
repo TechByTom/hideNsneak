@@ -141,7 +141,7 @@ func (instance *Instance) initiateConnectScan(outputFile string, additionOpts st
 	sshConfig := &ssh.ClientConfig{
 		User: instance.SSH.Username,
 		Auth: []ssh.AuthMethod{
-			PublicKeyFile(instance.SSH.PrivateKey),
+			PublicKeyFile(privateKey),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
@@ -152,7 +152,7 @@ func (instance *Instance) initiateConnectScan(outputFile string, additionOpts st
 
 	fmt.Println("Successfully installed Nmap")
 
-	instance.System.NmapDir = instance.System.HomeDir + "/" + instance.Cloud.IPv4 + "-nmap"
+	instance.System.NmapDir = homedir + "/" + ipv4 + "-nmap"
 	fmt.Println("Making directory")
 	instance.executeCmd("mkdir "+instance.System.NmapDir, sshConfig)
 	if evasive {
@@ -166,11 +166,11 @@ func (instance *Instance) initiateConnectScan(outputFile string, additionOpts st
 			fmt.Println(instance.Nmap.NmapCmd)
 
 			// PORT SCAN
-			command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", instance.SSH.PrivateKey, instance.SSH.Username+"@"+instance.Cloud.IPv4,
+			command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey, instance.SSH.Username+"@"+ipv4,
 				"sudo", "nmap", "-oA", instance.System.NmapDir+"/"+timestamp+"_"+outputFile, "-p", port, additionOpts, ips)
 
 			// //PING SCAN
-			// command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", instance.SSH.PrivateKey,instance.SSH.Username + "@" + instance.Cloud.IPv4,
+			// command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey,instance.SSH.Username + "@" + ipv4,
 			// 	"sudo", "nmap", "-oA", instance.System.NmapDir + "/" + timestamp + "_" + outputFile, additionOpts, ips  )
 
 			//Cmd Exec run is consuming a lot of memory due to the fact the method must hold.
@@ -196,11 +196,11 @@ func (instance *Instance) initiateConnectScan(outputFile string, additionOpts st
 		fmt.Println(instance.Nmap.NmapCmd)
 
 		// PORT SCAN
-		command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", instance.SSH.PrivateKey, instance.SSH.Username+"@"+instance.Cloud.IPv4,
+		command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey, instance.SSH.Username+"@"+ipv4,
 			"sudo", "nmap", "-oA", instance.System.NmapDir+"/"+timestamp+"_"+outputFile, "-p", ports, additionOpts, ips)
 
 		// //PING SCAN
-		// command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", instance.SSH.PrivateKey,instance.SSH.Username + "@" + instance.Cloud.IPv4,
+		// command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey,instance.SSH.Username + "@" + ipv4,
 		// 	"sudo", "nmap", "-oA", instance.System.NmapDir + "/" + timestamp + "_" + outputFile, additionOpts, ips  )
 		instance.Nmap.NmapActive = true
 		if err := command.Run(); err != nil {
@@ -237,7 +237,7 @@ func (instance *Instance) checkNmapProcess() {
 	sshConfig := &ssh.ClientConfig{
 		User: instance.SSH.Username,
 		Auth: []ssh.AuthMethod{
-			PublicKeyFile(instance.SSH.PrivateKey),
+			PublicKeyFile(privateKey),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
