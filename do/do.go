@@ -41,7 +41,7 @@ func importDOKey(pubkey string, clinet *godo.Client) string {
 
 /////////////////////////////
 
-func getDOIP(token string, id int) string {
+func GetDOIP(token string, id int) string {
 	client := newDOClient(token)
 	machineID := id
 	droplet, _, err := client.Droplets.Get(context.TODO(), machineID)
@@ -166,7 +166,7 @@ func newDropLetMultiCreateRequest(region string, client string, count int, size 
 	}
 }
 
-func deployDO(token string, regions string, size string, image string, fingerprint string, number int, cust string) []godo.Droplet {
+func DeployDO(token string, regions string, size string, image string, fingerprint string, number int, cust string) []godo.Droplet {
 	var droplets []godo.Droplet
 	client := newDOClient(token)
 	availableRegions, err := doRegions(client)

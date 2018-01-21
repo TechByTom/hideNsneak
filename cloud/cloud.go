@@ -12,7 +12,9 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/digitalocean/godo"
 	"github.com/rmikehodges/SneakyVulture/amazon"
+	"github.com/rmikehodges/SneakyVulture/do"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -52,7 +54,6 @@ func removeString(s []string, e string) []string {
 }
 
 func removeDuplicateStrings(inSlice []string) (outSlice []string) {
-	fmt.Println(inSlice)
 	outSlice = inSlice[:1]
 	for _, p := range inSlice {
 		inOutSlice := false
@@ -65,6 +66,11 @@ func removeDuplicateStrings(inSlice []string) (outSlice []string) {
 			outSlice = append(outSlice, p)
 		}
 	}
+	return
+}
+
+func splitOnComma(inString string) (outSlice []string) {
+	outSlice = strings.Split(inString, ",")
 	return
 }
 
@@ -157,37 +163,66 @@ func (config *Config) updateTermination(terminationMap map[string][]string) {
 	config.AWS.Termination = terminationMap
 }
 
-func ec2ToInstance([]ec2.Instance) {
-	var ec2Instances []cloud.Instance
-	var ec2Instance cloud.Instance
-	for _, instance := range runResult.Instances {
+func ec2ToInstance(runResult []*ec2.Instance) (ec2Instances []Instance) {
+	var ec2Instance Instance
+	for _, instance := range runResult {
 		ec2Instance.Cloud.ID = aws.StringValue(instance.InstanceId)
 		ec2Instance.Cloud.IPv4 = aws.StringValue(instance.PublicIpAddress)
 		ec2Instance.Cloud.Type = "EC2"
 		ec2Instance.SSH.Username = "ubuntu"
 		ec2Instance.Proxy.SOCKSActive = false
-		ec2Instance.SOCKSPort = "0"
-		ec2Instance.Cloud.Region = region
-		ec2Instance.SSH.PrivateKey = strings.Join(privKey[:len(privKey)-1], ".")
-		ec2Instance.Cloud.IPv4 = config
+		ec2Instance.CobaltStrike.TeamserverEnabled = false
+		ec2Instance.Nmap.NmapActive = false
 		ec2Instances = append(ec2Instances, ec2Instance)
 	}
+	return
 }
 
 ///////////////////////
+
+//DO Specified Helpers//
+func dropletsToInstances(droplets []godo.Droplet, config Config) []Instance {
+	var Instances []Instance
+	for _, drop := range droplets {
+
+		IP, err := drop.PublicIPv4()
+		if err != nil {
+			log.Fatalf("Unable to get ip address for %s", drop)
+		}
+		privKey := strings.Split(config.PublicKey, ".")
+		tempInstance := Instance{}
+		tempInstance.Cloud.Type = "DO"
+		tempInstance.Cloud.ID = strconv.Itoa(drop.ID)
+		tempInstance.Cloud.Region = drop.Region.Slug
+		tempInstance.Cloud.IPv4 = IP
+
+		tempInstance.SSH.Username = "root"
+		tempInstance.SSH.PrivateKey = strings.Join(privKey[:len(privKey)-1], ".")
+
+		tempInstance.Proxy.SOCKSActive = false
+
+		tempInstance.CobaltStrike.TeamserverEnabled = false
+
+		tempInstance.Nmap.NmapActive = false
+
+		Instances = append(Instances, tempInstance)
+	}
+	return Instances
+}
 
 //Instance Helpers//
 func stopInstances(config Config, allInstances map[int]*Instance) map[int]*Instance {
 	for _, instance := range allInstances {
 		if instance.Cloud.Type == "DO" {
-			destroyDOInstance(*instance)
+			id, _ := strconv.Atoi(instance.Cloud.ID)
+			do.DestroyDOInstance(config.DO.Token, id)
 		}
 	}
 	fmt.Println("About to terminate")
 	amazon.TerminateEC2Instances(config.AWS.Termination, config.AWS.Secret, config.AWS.AccessID)
 	for p := range allInstances {
 		if allInstances[p].Proxy.SOCKSActive == true && allInstances[p].System.CMD.Process != nil {
-			error := allInstances[p].CMD.Process.Kill()
+			error := allInstances[p].System.CMD.Process.Kill()
 			allInstances[p].Proxy.SOCKSActive = false
 			if error != nil {
 				fmt.Println("Error killing socks process")
@@ -207,34 +242,29 @@ func combineToMap(allInstances []Instance) map[int]*Instance {
 }
 
 func getIPAddresses(allInstances map[int]*Instance, config Config) {
-	for k := range allInstances {
+	for k, instance := range allInstances {
 		if allInstances[k].Cloud.Type == "EC2" {
-			allInstances[k].Cloud.IPv4 = getEC2IP(allInstances[k].Cloud.Region, config.AWS.Secret, config.AWS.AccessID, allInstances[k].Cloud.ID)
+			allInstances[k].Cloud.IPv4 = amazon.GetEC2IP(instance.Cloud.Region, config.AWS.Secret, config.AWS.AccessID, instance.Cloud.ID)
 		}
 		if allInstances[k].Cloud.Type == "DO" {
 			doID, _ := strconv.Atoi(allInstances[k].Cloud.ID)
-			allInstances[k].Cloud.IPv4 = getDOIP(config.DO.Token, doID)
+			allInstances[k].Cloud.IPv4 = do.GetDOIP(config.DO.Token, doID)
 		}
 	}
 	// return allInstances
 }
 func startInstances(config Config) (map[int]*Instance, map[string][]string) {
-	ec2Result := 0
-	doResult := 0
-	var terminationMap map[string][]string
-	var ec2Instances []Instance
-	var doInstances []Instance
 	var allInstances []Instance
+	var cloudInstances []Instance
 	var mappedInstances map[int]*Instance
 	if config.AWS.Number > 0 {
-		ec2Instances, ec2Result, terminationMap = deployMultipleEC2(config)
-		fmt.Println(ec2Instances)
-		allInstances = append(allInstances, ec2Instances...)
-	}
+		ec2Instances, terminationMap := amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID, splitOnComma(config.AWS.Regions), splitOnComma(config.AWS.ImageIDs), config.AWS.Number, config.PublicKey, config.AWS.Type)
+		cloudInstances := ec2ToInstance(ec2Instances)
+		allInstances = append(allInstances, cloudInstances...)
 	if config.DO.Number > 0 {
-		doInstances, doResult = deployDO(config)
-		allInstances = append(allInstances, doInstances...)
-	}
+		doInstances := do.DeployDO(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug, config.DO.Fingerprint, config.DO.Number, config.DO.Name)
+		cloudInstances := dropletsToInstances(doInstances, config)
+		allInstances = append(allInstances, cloudInstances...)
 	if config.AWS.Number > 0 || config.DO.Number > 0 {
 		mappedInstances = combineToMap(allInstances)
 		if ec2Result == 1 || doResult == 1 {

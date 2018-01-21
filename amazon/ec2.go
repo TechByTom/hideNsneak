@@ -21,7 +21,7 @@ type EC2Config struct {
 ////MISC Methods////
 ////////////////////
 
-func getEC2IP(region string, secret string, accessID string, instanceId string) string {
+func GetEC2IP(region string, secret string, accessID string, instanceId string) string {
 	svc := createEC2Session(region, secret, accessID)
 	result, _ := svc.DescribeInstances(&ec2.DescribeInstancesInput{
 		InstanceIds: aws.StringSlice([]string{instanceId}),
@@ -115,7 +115,7 @@ func ec2RegionMap(regionList []*ec2.Region, count int, imageIDList []string) []E
 }
 
 //Deploy multiple EC2 instances across regions and return Instance
-func deployMultipleEC2(secret string, accessID string, regionList []string, imageIDList []string, number int, imageID string, publicKey string, instanceType string) ([]*ec2.Instance, map[string][]string) {
+func DeployMultipleEC2(secret string, accessID string, regionList []string, imageIDList []string, number int, publicKey string, instanceType string) ([]*ec2.Instance, map[string][]string) {
 	terminationMap := make(map[string][]string)
 
 	svc := createEC2Session(regionList[0], secret, accessID)
@@ -127,9 +127,9 @@ func deployMultipleEC2(secret string, accessID string, regionList []string, imag
 		os.Exit(1)
 	}
 	var tempArray []string
-	ec2Map := ec2RegionMap(describedRegions.Regions, number, imageIDList)
+	ec2Configs := ec2RegionMap(describedRegions.Regions, number, imageIDList)
 	var ec2Instances []*ec2.Instance
-	for _, ec2 := range ec2Map {
+	for _, ec2 := range ec2Configs {
 		tempInstances := deployRegionEC2(ec2.ImageID, int64(ec2.Count), ec2.Region, secret, accessID, publicKey, instanceType)
 		if tempInstances == nil {
 			log.Println("Error creating instances for region: " + ec2.Region)
