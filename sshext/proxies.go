@@ -18,14 +18,14 @@ import (
 // }
 
 //May have to change this back, but it should work
-func CreateSingleSOCKS(privateKey string, username string, ipv4 string, port int) bool {
+func CreateSingleSOCKS(privateKey string, username string, ipv4 string, port int) (bool, *os.Process) {
 	portString := strconv.Itoa(port)
 	cmd := exec.Command("ssh", "-N", "-D", portString, "-o", "StrictHostKeyChecking=no", "-i", privateKey, fmt.Sprintf(username+"@%s", ipv4))
 	if err := cmd.Start(); err != nil {
 		fmt.Println(err)
-		return false
+		return false, nil
 	}
-	return true
+	return false, cmd.Process
 }
 
 func PrintProxyChains(socksConf map[int]string) string {

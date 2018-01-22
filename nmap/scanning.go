@@ -46,7 +46,7 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 
 			// //PING SCAN
 			// command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey,username + "@" + ipv4,
-			// 	"sudo", "nmap", "-oA", instance.System.NmapDir + "/" + timestamp + "_" + outputFile, additionOpts, ips  )
+			// 	"sudo", "nmap", "-oA", instance.Nmap.NmapLocalDir + "/" + timestamp + "_" + outputFile, additionOpts, ips  )
 
 			//Cmd Exec run is consuming a lot of memory due to the fact the method must hold.
 			if err := command.Run(); err != nil {
@@ -66,18 +66,18 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 		// 	timestamp := time.Now().Format("20060102150405")
 		// 	ports := strings.Join(portList, ",")
 		// 	ips := strings.Join(finalIPList, " ")
-		// 	instance.Nmap.NmapCmd = "nmap -oA " + instance.System.NmapDir + "/" + timestamp + "_" + outputFile + " -p" + ports + " " + additionOpts + " " + ips
+		// 	instance.Nmap.NmapCmd = "nmap -oA " + instance.Nmap.NmapLocalDir + "/" + timestamp + "_" + outputFile + " -p" + ports + " " + additionOpts + " " + ips
 
 		// 	fmt.Println("Executing nmap")
 		// 	fmt.Println(instance.Nmap.NmapCmd)
 
 		// 	// PORT SCAN
 		// 	command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey, username+"@"+ipv4,
-		// 		"sudo", "nmap", "-oA", instance.System.NmapDir+"/"+timestamp+"_"+outputFile, "-p", ports, additionOpts, ips)
+		// 		"sudo", "nmap", "-oA", instance.Nmap.NmapLocalDir+"/"+timestamp+"_"+outputFile, "-p", ports, additionOpts, ips)
 
 		// 	// //PING SCAN
 		// 	// command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey,username + "@" + ipv4,
-		// 	// 	"sudo", "nmap", "-oA", instance.System.NmapDir + "/" + timestamp + "_" + outputFile, additionOpts, ips  )
+		// 	// 	"sudo", "nmap", "-oA", instance.Nmap.NmapLocalDir + "/" + timestamp + "_" + outputFile, additionOpts, ips  )
 		// 	instance.Nmap.NmapActive = true
 		// 	if err := command.Run(); err != nil {
 		// 		fmt.Println("nmap")
