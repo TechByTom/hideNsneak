@@ -6,18 +6,15 @@ import (
 	"os"
 	"os/signal"
 	// "strings"
+	"github.com/rmikehodges/SneakyVulture/cloud"
 )
 
 //Cloud Proxy Tool
 func main() {
-	config := parseConfig()
-
-	//Delete existing droplets
-	droplets := listDroplets(config)
-	destroyMultipleDroplets(config, droplets)
+	config := cloud.ParseConfig("../config/config.yaml")
 
 	//StartInstances
-	allInstances, terminationMap := startInstances(config)
+	allInstances, terminationMap := cloud.StartInstances(config)
 	config.AWS.Termination = terminationMap
 	fmt.Println(config)
 	if len(allInstances) == 0 {
@@ -28,31 +25,30 @@ func main() {
 	// ports := strings.Split("49152,993,5432,515,2049,9,8081,8081,631,443,1723,4899,5009,9100,444,6000,5666,8009,32768,995,10000,1029,5190,3306,1110,22,88,7,554", ",")
 	// ports := strings.Split("3389,179,587,79,5800,1900,2000,3128,465,3986,143,1720,389,3000,7070,5060,111,990,144,139,8443,5000,37,5101,2121,106,548,1433,543,113,1755", ",")
 	//Just testing ports
-	// ports := strings.Split("443", ",")
+	// ports := strings.Split("80,443", ",")
 
 	//Not sure if this is the best way to go about it
 
 	// fmt.Println(allInstances[0])
 
 	// // //Gathering Information From Cloud Instances
-	// allInstances = setHomeDirs(allInstances)
+	cloud.Initialize(allInstances, config)
 
 	//Setting Up Proxychains
-	// _, proxychains, socksd := createMultipleSOCKS(allInstances, config.StartPort)
+	proxychains, socksd := cloud.CreateSOCKS(allInstances, config.StartPort)
 
 	//Setting Up Single SOCKS
-	allInstances[0].createSingleSOCKS(8081)
+	// allInstances[0].createSingleSOCKS(8081)
 
 	// // editProxychains(config.Proxychains, proxychains, 1)
-	// fmt.Println("\n\nProxychains Configuration: ")
-	// fmt.Println(proxychains)
-	// fmt.Println("Wating to end:")
-	// fmt.Println("\n\nSOCKSD Configuration: ")
-	// fmt.Println(socksd)
+	fmt.Println("\n\nProxychains Configuration: ")
+	fmt.Println(proxychains)
+	fmt.Println("Wating to end:")
+	fmt.Println("\n\nSOCKSD Configuration: ")
+	fmt.Println(socksd)
 
 	// //Running Nmap
-	// runConnectScans(allInstances, "schein_connect_discovery", "–host-timeout 1m -Pn -sT -T2 --open", true, "/Users/mike.hodges/Gigs/HenrySchein/scope", ports)
-	// go checkAllNmapProcesses(allInstances)
+	//cloud.RunConnectScans(allInstances, "schein_connect_discovery", "–host-timeout 1m -Pn -sT -T2 --open", true, "/Users/mike.hodges/Gigs/HenrySchein/second_scope2", ports, config.NmapDir)
 
 	//Teamserver Junk
 	// allInstances[1].teamserverSetup(config, "ms.profile", "test", "2018-05-21")
@@ -69,7 +65,7 @@ func main() {
 	// 	disableCloudFront(distribution, ETag, config)
 	// }
 
-	log.Println("Please CTRL-C to destroy droplets")
+	log.Println("Please CTRL-C to destroy instances")
 
 	// Catch CTRL-C and delete droplets.
 	c := make(chan os.Signal, 1)
@@ -77,7 +73,7 @@ func main() {
 	<-c
 
 	// // editProxychains(config.Proxychains, proxychains, 0)
-	allInstances = stopInstances(config, allInstances)
+	cloud.StopInstances(config, allInstances)
 }
 
 //Priorities:

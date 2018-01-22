@@ -1,4 +1,4 @@
-package helper
+package cloud
 
 import (
 	"bufio"
@@ -21,9 +21,9 @@ import (
 )
 
 //Parsing Helpers//
-func parseConfig() Config {
+func ParseConfig(configFile string) Config {
 	var config Config
-	data, err := ioutil.ReadFile("config/config.yaml")
+	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -165,17 +165,19 @@ func (config *Config) updateTermination(terminationMap map[string][]string) {
 	config.AWS.Termination = terminationMap
 }
 
-func ec2ToInstance(runResult []*ec2.Instance) (ec2Instances []Instance) {
+func ec2ToInstance(runResult []*ec2.Instance, regionMap map[string][]string) (ec2Instances []Instance) {
 	var ec2Instance Instance
-	for _, instance := range runResult {
-		ec2Instance.Cloud.ID = aws.StringValue(instance.InstanceId)
-		ec2Instance.Cloud.IPv4 = aws.StringValue(instance.PublicIpAddress)
-		ec2Instance.Cloud.Type = "EC2"
-		ec2Instance.SSH.Username = "ubuntu"
-		ec2Instance.Proxy.SOCKSActive = false
-		ec2Instance.CobaltStrike.TeamserverEnabled = false
-		ec2Instance.Nmap.NmapActive = false
-		ec2Instances = append(ec2Instances, ec2Instance)
+	for region, instanceIDs := range regionMap {
+		for _, instance := range runResult {
+			if contains(instanceIDs, *instance.InstanceId) {
+				ec2Instance.Cloud.ID = aws.StringValue(instance.InstanceId)
+				ec2Instance.Cloud.IPv4 = aws.StringValue(instance.PublicIpAddress)
+				ec2Instance.Cloud.Type = "EC2"
+				ec2Instance.SSH.Username = "ubuntu"
+				ec2Instance.Cloud.Region = region
+				ec2Instances = append(ec2Instances, ec2Instance)
+			}
+		}
 	}
 	return
 }
@@ -191,7 +193,6 @@ func dropletsToInstances(droplets []godo.Droplet, config Config) []Instance {
 		if err != nil {
 			log.Fatalf("Unable to get ip address for %s", drop)
 		}
-		privKey := strings.Split(config.PublicKey, ".")
 		tempInstance := Instance{}
 		tempInstance.Cloud.Type = "DO"
 		tempInstance.Cloud.ID = strconv.Itoa(drop.ID)
@@ -199,21 +200,13 @@ func dropletsToInstances(droplets []godo.Droplet, config Config) []Instance {
 		tempInstance.Cloud.IPv4 = IP
 
 		tempInstance.SSH.Username = "root"
-		tempInstance.SSH.PrivateKey = strings.Join(privKey[:len(privKey)-1], ".")
-
-		tempInstance.Proxy.SOCKSActive = false
-
-		tempInstance.CobaltStrike.TeamserverEnabled = false
-
-		tempInstance.Nmap.NmapActive = false
-
 		Instances = append(Instances, tempInstance)
 	}
 	return Instances
 }
 
 //Instance Helpers//
-func stopInstances(config Config, allInstances map[int]*Instance) map[int]*Instance {
+func StopInstances(config Config, allInstances []*Instance) {
 	for _, instance := range allInstances {
 		if instance.Cloud.Type == "DO" {
 			id, _ := strconv.Atoi(instance.Cloud.ID)
@@ -222,69 +215,76 @@ func stopInstances(config Config, allInstances map[int]*Instance) map[int]*Insta
 	}
 	fmt.Println("About to terminate")
 	amazon.TerminateEC2Instances(config.AWS.Termination, config.AWS.Secret, config.AWS.AccessID)
-	for p := range allInstances {
-		if allInstances[p].Proxy.SOCKSActive == true && allInstances[p].System.CMD.Process != nil {
-			error := allInstances[p].System.CMD.Process.Kill()
-			allInstances[p].Proxy.SOCKSActive = false
+	for _, instance := range allInstances {
+		if instance.Proxy.SOCKSActive == true && instance.System.CMD.Process != nil {
+			error := instance.System.CMD.Process.Kill()
+			instance.Proxy.SOCKSActive = false
 			if error != nil {
 				fmt.Println("Error killing socks process")
 				fmt.Println(error)
 			}
 		}
 	}
-	return allInstances
 }
 
-func combineToMap(allInstances []Instance) map[int]*Instance {
-	instanceMap := make(map[int]*Instance)
-	for i := range allInstances {
-		instanceMap[i] = &allInstances[i]
-	}
-	return instanceMap
-}
+//Probaly Unecessary
+// func combineToMap(allInstances []Instance) map[int]*Instance {
+// 	instanceMap := make(map[int]*Instance)
+// 	for i := range allInstances {
+// 		instanceMap[i] = &allInstances[i]
+// 	}
+// 	return instanceMap
+// }
 
-func getIPAddresses(allInstances map[int]*Instance, config Config) {
-	for k, instance := range allInstances {
-		if allInstances[k].Cloud.Type == "EC2" {
-			allInstances[k].Cloud.IPv4 = amazon.GetEC2IP(instance.Cloud.Region, config.AWS.Secret, config.AWS.AccessID, instance.Cloud.ID)
+func getIPAddresses(allInstances []*Instance, config Config) {
+	for _, instance := range allInstances {
+		if instance.Cloud.Type == "EC2" {
+			instance.Cloud.IPv4 = amazon.GetEC2IP(instance.Cloud.Region, config.AWS.Secret, config.AWS.AccessID, instance.Cloud.ID)
 		}
-		if allInstances[k].Cloud.Type == "DO" {
-			doID, _ := strconv.Atoi(allInstances[k].Cloud.ID)
-			allInstances[k].Cloud.IPv4 = do.GetDOIP(config.DO.Token, doID)
+		if instance.Cloud.Type == "DO" {
+			doID, _ := strconv.Atoi(instance.Cloud.ID)
+			instance.Cloud.IPv4 = do.GetDOIP(config.DO.Token, doID)
 		}
 	}
 	// return allInstances
 }
-func startInstances(config Config) (map[int]*Instance, map[string][]string) {
-	var allInstances []Instance
+
+func StartInstances(config Config) ([]*Instance, map[string][]string) {
 	var cloudInstances []Instance
-	var mappedInstances map[int]*Instance
+	var instanceArray []*Instance
 	var terminationMap map[string][]string
 	var ec2Instances []*ec2.Instance
 	if config.AWS.Number > 0 {
 		ec2Instances, terminationMap = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID, splitOnComma(config.AWS.Regions), splitOnComma(config.AWS.ImageIDs), config.AWS.Number, config.PublicKey, config.AWS.Type)
-		cloudInstances = ec2ToInstance(ec2Instances)
-		allInstances = append(allInstances, cloudInstances...)
+		cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances, terminationMap)...)
 	}
 	if config.DO.Number > 0 {
 		doInstances := do.DeployDO(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug, config.DO.Fingerprint, config.DO.Number, config.DO.Name)
-		cloudInstances = dropletsToInstances(doInstances, config)
-		allInstances = append(allInstances, cloudInstances...)
+		cloudInstances = append(cloudInstances, dropletsToInstances(doInstances, config)...)
 	}
-	if len(allInstances) > 0 {
-		mappedInstances = combineToMap(allInstances)
+	if len(cloudInstances) > 0 {
 		fmt.Println("Waiting a few seconds for all instances to initialize...")
 		time.Sleep(60 * time.Second)
-		getIPAddresses(mappedInstances, config)
-		for p := range mappedInstances {
-			fmt.Println(mappedInstances[p])
+		for i := range cloudInstances {
+			instanceArray = append(instanceArray, &cloudInstances[i])
 		}
+		getIPAddresses(instanceArray, config)
 	}
-	return mappedInstances, terminationMap
+	return instanceArray, terminationMap
+}
+
+func Initialize(allInstances []*Instance, config Config) {
+	for _, instance := range allInstances {
+		instance.SSH.PrivateKey = strings.Split(config.PublicKey, ".pub")[0]
+		instance.System.HomeDir = sshext.SetHomeDir(instance.Cloud.IPv4, instance.SSH.Username, instance.SSH.PrivateKey)
+		instance.Proxy.SOCKSActive = false
+		instance.CobaltStrike.TeamserverEnabled = false
+		instance.Nmap.NmapActive = false
+	}
 }
 
 //Proxies//
-func createMultipleSOCKS(Instances map[int]*Instance, startPort int, config Config) (string, string) {
+func CreateSOCKS(Instances []*Instance, startPort int) (string, string) {
 	socksConf := make(map[int]string)
 	counter := startPort
 	for _, instance := range Instances {
@@ -304,7 +304,8 @@ func createMultipleSOCKS(Instances map[int]*Instance, startPort int, config Conf
 
 //Nmap Helpers//
 //TODO: Add an even more evasive option in here that will further limit the IPs scanned on that one address.
-func RunConnectScans(instances []*Instance, output string, additionalOpts string, evasive bool, scope string, ports []string) {
+//TODO: Add ability for users to define their scan names further
+func RunConnectScans(instances []*Instance, output string, additionalOpts string, evasive bool, scope string, ports []string, localDir string) {
 	targets := nmap.ParseIPFile(scope)
 	ipPorts := nmap.GenerateIPPortList(targets, ports)
 	if evasive {
@@ -312,7 +313,7 @@ func RunConnectScans(instances []*Instance, output string, additionalOpts string
 		nmapTargeting := nmap.RandomizeIPPortsToHosts(len(instances), ipPorts)
 		for i, instance := range instances {
 			go nmap.InitiateConnectScan(instance.SSH.Username, instance.Cloud.IPv4, instance.SSH.PrivateKey, nmapTargeting[i],
-				instance.System.HomeDir, instance.System.HomeDir+"/nmap-"+instance.Cloud.IPv4, strings.Join(ports, "-"), additionalOpts,
+				instance.System.HomeDir, localDir, strings.Join(ports, "-"), additionalOpts,
 				evasive)
 		}
 	}

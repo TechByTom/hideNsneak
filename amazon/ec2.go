@@ -130,16 +130,18 @@ func DeployMultipleEC2(secret string, accessID string, regionList []string, imag
 	ec2Configs := ec2RegionMap(describedRegions.Regions, number, imageIDList)
 	var ec2Instances []*ec2.Instance
 	for _, ec2 := range ec2Configs {
-		tempInstances := deployRegionEC2(ec2.ImageID, int64(ec2.Count), ec2.Region, secret, accessID, publicKey, instanceType)
-		if tempInstances == nil {
-			log.Println("Error creating instances for region: " + ec2.Region)
-		} else {
-			ec2Instances = append(ec2Instances, tempInstances...)
-			terminationMap[ec2.Region] = tempArray
-			for _, q := range tempInstances {
-				terminationMap[ec2.Region] = append(terminationMap[ec2.Region], *q.InstanceId)
-			}
+		if ec2.Count > 0 {
+			tempInstances := deployRegionEC2(ec2.ImageID, int64(ec2.Count), ec2.Region, secret, accessID, publicKey, instanceType)
+			if tempInstances == nil {
+				log.Println("Error creating instances for region: " + ec2.Region)
+			} else {
+				ec2Instances = append(ec2Instances, tempInstances...)
+				terminationMap[ec2.Region] = tempArray
+				for _, q := range tempInstances {
+					terminationMap[ec2.Region] = append(terminationMap[ec2.Region], *q.InstanceId)
+				}
 
+			}
 		}
 	}
 

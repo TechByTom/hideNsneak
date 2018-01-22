@@ -29,7 +29,7 @@ func PublicKeyFile(file string) ssh.AuthMethod {
 }
 
 //
-func setHomeDir(ipv4 string, username string, privateKey string) string {
+func SetHomeDir(ipv4 string, username string, privateKey string) string {
 	sshConfig := &ssh.ClientConfig{
 		User: username,
 		Auth: []ssh.AuthMethod{
