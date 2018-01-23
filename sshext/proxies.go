@@ -25,7 +25,7 @@ func CreateSingleSOCKS(privateKey string, username string, ipv4 string, port int
 		fmt.Println(err)
 		return false, nil
 	}
-	return false, cmd.Process
+	return true, cmd.Process
 }
 
 func PrintProxyChains(socksConf map[int]string) string {

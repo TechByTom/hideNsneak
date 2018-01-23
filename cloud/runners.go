@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rmikehodges/SneakyVulture/drone"
 	"github.com/rmikehodges/SneakyVulture/nmap"
 	"github.com/rmikehodges/SneakyVulture/sshext"
 )
@@ -31,7 +32,8 @@ func CreateSOCKS(Instances []*Instance, startPort int) (string, string) {
 //Nmap Helpers//
 //TODO: Add an even more evasive option in here that will further limit the IPs scanned on that one address.
 //TODO: Add ability for users to define their scan names further
-func RunConnectScans(instances []*Instance, output string, additionalOpts string, evasive bool, scope string, ports []string, localDir string) {
+func RunConnectScans(instances []*Instance, output string, additionalOpts string, evasive bool, scope string,
+	ports []string, localDir string, droneImport bool) {
 	targets := nmap.ParseIPFile(scope)
 	ipPorts := nmap.GenerateIPPortList(targets, ports)
 	if evasive {
@@ -50,6 +52,16 @@ func RunConnectScans(instances []*Instance, output string, additionalOpts string
 	// 	// 	 go Instances[i].initiateNmap(output, additionalOpts, false)
 	// 	// }
 	// }
+}
+
+func ImportNmaps(localDir string, insecureSSL bool, limitHosts bool, forcePorts bool, lairPID string, tags string) {
+	importResult := false
+	xmlFiles := nmap.ListNmapXML(localDir)
+	for _, xmlFile := range xmlFiles {
+		for !importResult {
+			importResult = drone.NmapImport(insecureSSL, limitHosts, forcePorts, xmlFile, lairPID, tags)
+		}
+	}
 }
 
 // //This doesn't work very well

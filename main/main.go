@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	// "strings"
 	"github.com/rmikehodges/SneakyVulture/cloud"
 )
@@ -63,12 +65,12 @@ func main() {
 	// 	disableCloudFront(distribution, ETag, config)
 	// }
 
-	// log.Println("Please CTRL-C to destroy instances")
+	log.Println("Please CTRL-C to destroy instances")
 
-	// // Catch CTRL-C and delete droplets.
-	// c := make(chan os.Signal, 1)
-	// signal.Notify(c, os.Interrupt)
-	// <-c
+	// Catch CTRL-C and delete droplets.
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	<-c
 
 	// // editProxychains(config.Proxychains, proxychains, 0)
 	cloud.StopInstances(config, allInstances)
@@ -80,7 +82,6 @@ func main() {
 // 3. Finish Cloudfronting
 // 4. Add ability to stop/start EC2 instances
 // 5. Add ability to import existing instances
-// 6. Auto Drone-nmap on retrieval
 // 7. Interface
 // 8. Log all the things
 // 9. Add more cloud providers

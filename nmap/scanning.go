@@ -1,6 +1,7 @@
 package nmap
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -87,11 +88,26 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 		// }
 
 	}
-	if sshext.RsyncDirFromHost(nmapDir, localDir, username, ipv4, privateKey) {
+	if !sshext.RsyncDirFromHost(nmapDir, localDir, username, ipv4, privateKey) {
 		fmt.Println("done")
-		return true
+		return false
 	}
-	return false
+
+	return true
+}
+
+func ListNmapXML(nmapDir string) []string {
+	var outb, errb bytes.Buffer
+	cmd := exec.Command("find", nmapDir, "-type", "f", "-name", "*.xml")
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+	err := cmd.Run()
+	output := outb.String()
+	if err != nil {
+		fmt.Println("Problem running find")
+		return nil
+	}
+	return strings.Split(output, "\n")
 }
 
 func CheckNmapProcess(ipv4 string, username string, privateKey string, nmapCmd string) (string, bool) {

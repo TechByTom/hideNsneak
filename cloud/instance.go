@@ -93,23 +93,7 @@ type Instance struct {
 	}
 }
 
-func (config *Config) updateTermination(terminationMap map[string][]string) {
-	config.AWS.Termination = terminationMap
-}
-
-func getIPAddresses(allInstances []*Instance, config Config) {
-	for _, instance := range allInstances {
-		if instance.Cloud.Type == "EC2" {
-			instance.Cloud.IPv4 = amazon.GetEC2IP(instance.Cloud.Region, config.AWS.Secret, config.AWS.AccessID, instance.Cloud.ID)
-		}
-		if instance.Cloud.Type == "DO" {
-			doID, _ := strconv.Atoi(instance.Cloud.ID)
-			instance.Cloud.IPv4 = do.GetDOIP(config.DO.Token, doID)
-		}
-	}
-	// return allInstances
-}
-
+//Start, Stop, Initialize
 func StartInstances(config Config) ([]*Instance, map[string][]string) {
 	var cloudInstances []Instance
 	var instanceArray []*Instance
@@ -134,36 +118,6 @@ func StartInstances(config Config) ([]*Instance, map[string][]string) {
 	return instanceArray, terminationMap
 }
 
-func Initialize(allInstances []*Instance, config Config) {
-	for _, instance := range allInstances {
-		instance.SSH.PrivateKey = strings.Split(config.PublicKey, ".pub")[0]
-		instance.Cloud.HomeDir = sshext.SetHomeDir(instance.Cloud.IPv4, instance.SSH.Username, instance.SSH.PrivateKey)
-		instance.Proxy.SOCKSActive = false
-		instance.CobaltStrike.TeamserverEnabled = false
-		instance.Nmap.NmapActive = false
-	}
-}
-
-func dropletsToInstances(droplets []godo.Droplet, config Config) []Instance {
-	var Instances []Instance
-	for _, drop := range droplets {
-
-		IP, err := drop.PublicIPv4()
-		if err != nil {
-			log.Fatalf("Unable to get ip address for %s", drop)
-		}
-		tempInstance := Instance{}
-		tempInstance.Cloud.Type = "DO"
-		tempInstance.Cloud.ID = strconv.Itoa(drop.ID)
-		tempInstance.Cloud.Region = drop.Region.Slug
-		tempInstance.Cloud.IPv4 = IP
-
-		tempInstance.SSH.Username = "root"
-		Instances = append(Instances, tempInstance)
-	}
-	return Instances
-}
-
 func StopInstances(config Config, allInstances []*Instance) {
 	for _, instance := range allInstances {
 		if instance.Cloud.Type == "DO" {
@@ -185,6 +139,37 @@ func StopInstances(config Config, allInstances []*Instance) {
 	}
 }
 
+func Initialize(allInstances []*Instance, config Config) {
+	for _, instance := range allInstances {
+		instance.SSH.PrivateKey = strings.Split(config.PublicKey, ".pub")[0]
+		instance.Cloud.HomeDir = sshext.SetHomeDir(instance.Cloud.IPv4, instance.SSH.Username, instance.SSH.PrivateKey)
+		instance.Proxy.SOCKSActive = false
+		instance.CobaltStrike.TeamserverEnabled = false
+		instance.Nmap.NmapActive = false
+	}
+}
+
+//Converting Custom cloud objects to Instance objects
+func dropletsToInstances(droplets []godo.Droplet, config Config) []Instance {
+	var Instances []Instance
+	for _, drop := range droplets {
+
+		IP, err := drop.PublicIPv4()
+		if err != nil {
+			log.Fatalf("Unable to get ip address for %s", drop)
+		}
+		tempInstance := Instance{}
+		tempInstance.Cloud.Type = "DO"
+		tempInstance.Cloud.ID = strconv.Itoa(drop.ID)
+		tempInstance.Cloud.Region = drop.Region.Slug
+		tempInstance.Cloud.IPv4 = IP
+
+		tempInstance.SSH.Username = "root"
+		Instances = append(Instances, tempInstance)
+	}
+	return Instances
+}
+
 func ec2ToInstance(runResult []*ec2.Instance, regionMap map[string][]string) (ec2Instances []Instance) {
 	var ec2Instance Instance
 	for region, instanceIDs := range regionMap {
@@ -200,4 +185,21 @@ func ec2ToInstance(runResult []*ec2.Instance, regionMap map[string][]string) (ec
 		}
 	}
 	return
+}
+
+func (config *Config) updateTermination(terminationMap map[string][]string) {
+	config.AWS.Termination = terminationMap
+}
+
+func getIPAddresses(allInstances []*Instance, config Config) {
+	for _, instance := range allInstances {
+		if instance.Cloud.Type == "EC2" {
+			instance.Cloud.IPv4 = amazon.GetEC2IP(instance.Cloud.Region, config.AWS.Secret, config.AWS.AccessID, instance.Cloud.ID)
+		}
+		if instance.Cloud.Type == "DO" {
+			doID, _ := strconv.Atoi(instance.Cloud.ID)
+			instance.Cloud.IPv4 = do.GetDOIP(config.DO.Token, doID)
+		}
+	}
+	// return allInstances
 }
