@@ -12,7 +12,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTargets map[int][]string, homedir string, localDir string, outputFile string, additionOpts string, evasive bool) bool {
+func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTargets map[int][]string,
+	homedir string, localDir string, additionOpts string, evasive bool) bool {
 	sshConfig := &ssh.ClientConfig{
 		User: username,
 		Auth: []ssh.AuthMethod{
@@ -20,7 +21,7 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-
+	fmt.Println("Installing nmap")
 	sshext.ExecuteCmd(`sudo apt-get update;
 		sudo apt-get install -y nmap;
 		sudo apt-get install -y screen`, ipv4, sshConfig)
@@ -32,10 +33,11 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 	sshext.ExecuteCmd("mkdir "+nmapDir, ipv4, sshConfig)
 	if evasive {
 		for port, ipList := range nmapTargets {
+			portString := strconv.Itoa(port)
 			fmt.Println("In the evasive scanning if statement")
 			timestamp := time.Now().Format("20060102150405")
 			ips := (strings.Join(ipList, " "))
-			nmapCommand := fmt.Sprintf("nmap -oA"+" "+nmapDir+"/"+timestamp+"_"+outputFile+" "+"-p%d"+" "+additionOpts+" "+ips, port)
+			nmapCommand := fmt.Sprintf("nmap -oA"+" "+nmapDir+"/"+timestamp+"_"+portString+" "+"-p%d"+" "+additionOpts+" "+ips, port)
 
 			fmt.Println("Executing nmap")
 			fmt.Println(nmapCommand)
@@ -43,7 +45,7 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 			// PORT SCAN
 
 			command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey, username+"@"+ipv4,
-				"sudo", "nmap", "-oA", nmapDir+"/"+timestamp+"_"+outputFile, "-p", strconv.Itoa(port), additionOpts, ips)
+				"sudo", "nmap", "-oA", nmapDir+"/"+timestamp+"_"+portString, "-p", strconv.Itoa(port), additionOpts, ips)
 
 			// //PING SCAN
 			// command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey,username + "@" + ipv4,

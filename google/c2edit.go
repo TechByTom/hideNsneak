@@ -6,6 +6,8 @@ import (
 	"regexp"
 )
 
+//This file should be available to the Cloudfront files as well
+
 func removeHeaders(c2File string, headers []string) string {
 	var matches string
 	for _, header := range headers {

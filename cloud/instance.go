@@ -45,6 +45,13 @@ type Config struct {
 		Name        string `yaml:"name"`
 		Number      int    `yaml:"number"`
 	} `yaml:"DO"`
+	Google struct {
+		ImageFamily  string `yaml:"imageFamily"`
+		ImageProject string `yaml:"imageProject"`
+		MachineType  string `yaml:"machineType"`
+		Zones        string `yaml:"zones"`
+		Number       int    `yaml:"number"`
+	} `yaml:"Google"`
 }
 
 type Instance struct {
@@ -202,4 +209,8 @@ func getIPAddresses(allInstances []*Instance, config Config) {
 		}
 	}
 	// return allInstances
+}
+
+func DestroyAllDroplets(token string) {
+	do.DestroyAllDrops(token)
 }

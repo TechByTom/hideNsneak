@@ -20,7 +20,6 @@ type RedirectorSource struct {
 }
 
 func generateSource(projectDir string, redirector RedirectorSource) bool {
-	fmt.Println(projectDir + "/redirector.tpl")
 	redirectorTemplate, err := template.ParseFiles(projectDir + "/redirector.tpl")
 	if err != nil {
 		//Log here
@@ -28,7 +27,6 @@ func generateSource(projectDir string, redirector RedirectorSource) bool {
 		return false
 	}
 	if _, err := os.Stat(projectDir + "/redirector.go"); err == nil {
-		fmt.Println("It exists")
 		err := os.Remove(projectDir + "/redirector.go")
 		if err != nil {
 			fmt.Println("There was a problem deleting the previous Go file. It may not have updated correctly")

@@ -199,6 +199,13 @@ func listDroplets(token string) []godo.Droplet {
 	})
 	if err != nil {
 		log.Print("There was an error retrieving droplets.")
+		return nil
 	}
 	return droplets
+}
+
+func DestroyAllDrops(token string) {
+	drops := listDroplets(token)
+	destroyMultipleDroplets(token, drops)
+	fmt.Println("Your drops have been deleted")
 }

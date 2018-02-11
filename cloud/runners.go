@@ -3,7 +3,6 @@ package cloud
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/rmikehodges/SneakyVulture/drone"
 	"github.com/rmikehodges/SneakyVulture/nmap"
@@ -34,15 +33,16 @@ func CreateSOCKS(Instances []*Instance, startPort int) (string, string) {
 //TODO: Add ability for users to define their scan names further
 func RunConnectScans(instances []*Instance, output string, additionalOpts string, evasive bool, scope string,
 	ports []string, localDir string, droneImport bool) {
+	fmt.Println("Generating IP Port list")
 	targets := nmap.ParseIPFile(scope)
 	ipPorts := nmap.GenerateIPPortList(targets, ports)
-	if evasive {
+	fmt.Println("Generated port list ")
+	if evasive == true {
 		fmt.Println("Evasive")
 		nmapTargeting := nmap.RandomizeIPPortsToHosts(len(instances), ipPorts)
 		for i, instance := range instances {
 			go nmap.InitiateConnectScan(instance.SSH.Username, instance.Cloud.IPv4, instance.SSH.PrivateKey, nmapTargeting[i],
-				instance.Cloud.HomeDir, localDir, strings.Join(ports, "-"), additionalOpts,
-				evasive)
+				instance.Cloud.HomeDir, localDir, additionalOpts, evasive)
 		}
 	}
 	// else {

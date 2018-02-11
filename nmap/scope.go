@@ -22,7 +22,7 @@ func cidrHosts(cidr string) ([]string, error) {
 		ips = append(ips, ip.String())
 	}
 	// remove network address and broadcast address
-	return ips[1 : len(ips)-1], nil
+	return ips, nil
 }
 
 func inc(ip net.IP) {
@@ -76,6 +76,8 @@ func ParseIPFile(path string) []string {
 			}
 		}
 	}
+	fmt.Println("IP List generated")
+	fmt.Println(len(ipList))
 	return ipList
 }
 
@@ -97,17 +99,23 @@ func GenerateIPPortList(targets []string, ports []string) []string {
 func RandomizeIPPortsToHosts(scannerCount int, ipPortList []string) map[int]map[int][]string {
 	nmapTargeting := make(map[int]map[int][]string)
 	r := rand.New(rand.NewSource(time.Now().Unix()))
-	for _, i := range r.Perm(len(ipPortList)) {
-		p := i % scannerCount
-		splitArray := strings.Split(ipPortList[i], ":")
+	tempSlice := ipPortList
+	for range ipPortList {
+		tempIndex := r.Intn(len(tempSlice))
+		p := tempIndex % scannerCount
+		splitArray := strings.Split(ipPortList[tempIndex], ":")
 		port, _ := strconv.Atoi(splitArray[1])
 		targetIP := splitArray[0]
-		if len(nmapTargeting[p][port]) != 0 {
-			nmapTargeting[p][port] = append(nmapTargeting[p][port], targetIP)
+		if nmapTargeting[p] == nil {
+			ipSlice := []string{targetIP}
+			ipSlice = ipSlice[:]
+			portMap := make(map[int][]string)
+			portMap[port] = ipSlice
+			nmapTargeting[p] = portMap
 		} else {
-			nmapTargeting[p] = make(map[int][]string)
-			nmapTargeting[p][port] = strings.Split(targetIP, "  ")
+			nmapTargeting[p][port] = append(nmapTargeting[p][port], targetIP)
 		}
+		tempSlice = append(tempSlice[:tempIndex], tempSlice[tempIndex+1:]...)
 	}
 	return nmapTargeting
 }
