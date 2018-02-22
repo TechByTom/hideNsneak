@@ -135,7 +135,6 @@ func ShellSystem(ipv4 string, username string, privateKey string) {
 
 	// Accepting commands
 	for {
-		fmt.Println("got here")
 		reader := bufio.NewReader(os.Stdin)
 		str, _ := reader.ReadString('\n')
 		fmt.Println(str)

@@ -33,10 +33,8 @@ func CreateSOCKS(Instances []*Instance, startPort int) (string, string) {
 //TODO: Add ability for users to define their scan names further
 func RunConnectScans(instances []*Instance, output string, additionalOpts string, evasive bool, scope string,
 	ports []string, localDir string, droneImport bool) {
-	fmt.Println("Generating IP Port list")
 	targets := nmap.ParseIPFile(scope)
 	ipPorts := nmap.GenerateIPPortList(targets, ports)
-	fmt.Println("Generated port list ")
 	if evasive == true {
 		fmt.Println("Evasive")
 		nmapTargeting := nmap.RandomizeIPPortsToHosts(len(instances), ipPorts)

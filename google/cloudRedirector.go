@@ -16,6 +16,8 @@ type RedirectorSource struct {
 	RestrictedSubnet string
 	RestrictedHeader string
 	DefaultRedirect  string
+	HeaderName       string
+	HeaderValue      string
 	C2Url            string
 }
 

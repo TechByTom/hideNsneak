@@ -100,19 +100,50 @@ type Instance struct {
 	}
 }
 
+//String() prints generic information for the user
+func (instance Instance) String() string {
+	socksPort := ""
+	nmapActive := "N"
+	if instance.Proxy.SOCKSActive {
+		socksPort = instance.Proxy.SOCKSPort
+	}
+	if instance.Nmap.NmapActive {
+		nmapActive := "Y"
+	}
+	fmt.Printf("Type: %s | IP: %s | Region: %s | Nmap Active: %s | SOCKS: %s", instance.Cloud.Type, instance.Cloud.IPv4,
+		instance.Cloud.Region, nmapActive, socksPort)
+}
+
+//Detail() prints all information about the instance
+func (instance Instance) Detail() string {
+
+}
+
 //Start, Stop, Initialize
-func StartInstances(config Config) ([]*Instance, map[string][]string) {
+func StartInstances(config Config, providerMap [string]int) ([]*Instance, map[string][]string) {
 	var cloudInstances []Instance
 	var instanceArray []*Instance
 	var terminationMap map[string][]string
 	var ec2Instances []*ec2.Instance
-	if config.AWS.Number > 0 {
-		ec2Instances, terminationMap = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID, splitOnComma(config.AWS.Regions), splitOnComma(config.AWS.ImageIDs), config.AWS.Number, config.PublicKey, config.AWS.Type)
-		cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances, terminationMap)...)
-	}
-	if config.DO.Number > 0 {
-		doInstances := do.DeployDO(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug, config.DO.Fingerprint, config.DO.Number, config.DO.Name)
-		cloudInstances = append(cloudInstances, dropletsToInstances(doInstances, config)...)
+
+	for provider, count := range providerMap {
+		switch provider {
+		case "AWS":
+			ec2Instances, terminationMap = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID,
+				splitOnComma(config.AWS.Regions), splitOnComma(config.AWS.ImageIDs), count,
+				config.PublicKey, config.AWS.Type)
+			cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances, terminationMap)...)
+		case "DO":
+			doInstances := do.DeployDO(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug,
+				config.DO.Fingerprint, count, config.DO.Name)
+			cloudInstances = append(cloudInstances, dropletsToInstances(doInstances, config)...)
+		case "Azure":
+			//To be added
+		case "Google":
+			//To be added
+		default:
+			continue
+		}
 	}
 	if len(cloudInstances) > 0 {
 		fmt.Println("Waiting a few seconds for all instances to initialize...")
