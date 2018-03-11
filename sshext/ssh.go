@@ -62,31 +62,30 @@ func ScpFileFromHost(file string, targetDir string, username string, ipv4 string
 	return true
 }
 
-func RsyncDirToHost(dir string, targetDir string, username string, ipv4 string, privateKey string) bool {
+func RsyncDirToHost(dir string, targetDir string, username string, ipv4 string, privateKey string) error {
 	command := exec.Command("rsync", "-azu", "-e", "'ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey, "-l", username+"'", dir, ipv4+":"+targetDir)
 	if err := command.Start(); err != nil {
 		fmt.Println("SCPDir failed")
 		fmt.Println(err)
-		return false
+		return err
 	}
-	return true
+	return nil
 }
 
 func printCommand(cmd *exec.Cmd) {
 	fmt.Printf("==> Executing: %s\n", strings.Join(cmd.Args, " "))
 }
 
-func RsyncDirFromHost(dir string, targetDir string, username string, ipv4 string, privateKey string) bool {
+func RsyncDirFromHost(dir string, targetDir string, username string, ipv4 string, privateKey string) error {
 	rsyncCommand := "rsync -azu -e 'ssh -o StrictHostKeyChecking=no -i " + privateKey + " -l " + username + "' " + ipv4 + ":" + dir + " " + targetDir
 	command := exec.Command("bash", "-c", rsyncCommand)
 	command.Stderr = os.Stderr
 	printCommand(command)
 	if err := command.Start(); err != nil {
 		fmt.Println("Rsync Dir failed")
-		fmt.Println(err)
-		return false
+		return err
 	}
-	return true
+	return nil
 }
 
 func ShellSystem(ipv4 string, username string, privateKey string) {

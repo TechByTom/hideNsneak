@@ -55,7 +55,7 @@ func GetDOIP(token string, id int) string {
 	return IP
 }
 
-func DestroyDOInstance(token string, machineID int) bool, err {
+func DestroyDOInstance(token string, machineID int) (bool, error) {
 	client := newDOClient(token)
 	_, err := client.Droplets.Delete(context.TODO(), machineID)
 	if err != nil {

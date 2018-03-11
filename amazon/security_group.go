@@ -27,6 +27,7 @@ func describeRegionSecurityGroup(secret string, accessID string, region string, 
 	return securityGroups
 }
 
+//TDOD: Get security groups for instance
 func describeInstanceSecurityGroup(region string, ip string, secret string, accessID string, securityGroupSlice []string) *ec2.DescribeSecurityGroupsOutput {
 	svc := createEC2Session(region, secret, accessID)
 	securityGroups, err := svc.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{

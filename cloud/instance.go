@@ -17,6 +17,9 @@ import (
 	"github.com/rmikehodges/hideNsneak/sshext"
 )
 
+//Notes:
+//Possibly add Port struct that contains the protocol i.e tcp/udp
+
 type Config struct {
 	PublicKey   string `yaml:"PublicKey"`
 	Customer    string `yaml:"Customer"`
@@ -100,6 +103,24 @@ type Instance struct {
 	}
 }
 
+type Firewall struct {
+	Instances	[]*Instance
+	PortMap 	map[string][]int
+}
+
+func ParseConfig(configFile string) Config {
+	var config Config
+	data, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return config
+}
+
 //String() prints generic information for the user
 func (instance Instance) String() string {
 	socksPort := ""
@@ -158,7 +179,7 @@ func StartInstances(config Config, providerMap map[string]int) ([]*Instance, map
 
 		//Logging Creation of instances
 		for _, instance := range instanceArray {
-			WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " created")
+			misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " created")
 		}
 	}
 
@@ -173,20 +194,22 @@ func StopInstances(config Config, allInstances []*Instance) {
 		case "DO":
 			id, _ := strconv.Atoi(instance.Cloud.ID)
 			if err := do.DestroyDOInstance(config.DO.Token, instance.Cloud.ID) != nil {
-				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
 			} else {
-				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
-				WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + err)
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
+				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + err)
 			}
 		case "AWS":
 			if err := amazon.TerminateInstances(instance.) != nil {
-				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
 			} else {
-				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
-				WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + err)
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
+				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + err)
 			}
 		case "Google":
+			//TODO: Implement stopping of google
 		case "Azure":
+			//TODOL Implement Stopping of Azure
 		}
 	}
 	stopSocks(allInstances)
@@ -200,12 +223,12 @@ func stopSOCKS(allInstances []*Instance) {
 		if instance.Proxy.SOCKSActive == true && instance.Proxy.Process != nil {
 			err := instance.Proxy.Process.Kill()
 			if err != nil {
-				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " SOCKS not destroyed- see error log")
-				WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + "Error killing SOCKS process:" + err)
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " SOCKS not destroyed- see error log")
+				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + "Error killing SOCKS process:" + err)
 				continue
 			}
 			instance.Proxy.SOCKSActive = false
-			WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " : SOCKS destroyed":)
+			misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " : SOCKS destroyed":)
 		}
 	}
 }
@@ -217,6 +240,7 @@ func Initialize(allInstances []*Instance, config Config) {
 		instance.Proxy.SOCKSActive = false
 		instance.CobaltStrike.TeamserverEnabled = false
 		instance.Nmap.NmapActive = false
+		misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " initialized")
 	}
 }
 

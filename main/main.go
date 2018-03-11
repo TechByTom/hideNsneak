@@ -331,6 +331,8 @@ func socksUI(instances []*cloud.Instance) (string, string) {
 // 3. Add ability to import existing instances
 // 4. Finish Cloudfronting
 
+//I'm going to have to a abstract the logging away from the cloud package
+
 // 2. Finish Security Groups and Firewalls for DO/AWS
 // 4. Add ability to stop/start EC2 instances
 // 5.

@@ -45,9 +45,13 @@ func teamserverSetup(privateKey string, ipv4 string, username string, homeDir st
 	fmt.Println("Successfully installed Oracle Java")
 
 	//TODO Change these home directories
-	sshext.RsyncDirToHost(csdir, homedir, username, ipv4, privateKey)
-	fmt.Println("Copied CS")
-	sshext.RsyncDirToHost(csprofiles, homedir, username, ipv4, privateKey)
+	if err := sshext.RsyncDirToHost(csdir, homedir, username, ipv4, privateKey) != nil {
+
+	}
+
+	if err := sshext.RsyncDirToHost(csprofiles, homedir, username, ipv4, privateKey) != nil {
+		
+	}
 	fmt.Println("Copied Profiles")
 
 	fmt.Println(sshext.ExecuteCmd("cd "+homedir+"/"+path.Base(csdir)+" && echo "+cslicense+" | ./update", ipv4, sshConfig))

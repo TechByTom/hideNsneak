@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rmikehodges/hideNsneak/cloud"
+	"github.com/rmikehodges/hideNsneak/misc"
 	"github.com/rmikehodges/hideNsneak/sshext"
 	"golang.org/x/crypto/ssh"
 )
@@ -48,7 +48,7 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 			command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey, username+"@"+ipv4,
 				"sudo", "nmap", "-oA", nmapDir+"/"+timestamp+"_"+portString, "-p", strconv.Itoa(port), additionOpts, ips)
 
-			cloud.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " Disptaching nmap scan to host : " + nmapCommand)
+			misc.WriteActivityLog(instanceType + " " + ipv4 + " " + region + " Disptaching nmap scan to host : " + nmapCommand)
 
 			// //PING SCAN
 			// command := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey,username + "@" + ipv4,
@@ -56,8 +56,8 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 
 			//Cmd Exec run is consuming a lot of memory due to the fact the method must hold.
 			if err := command.Run(); err != nil {
-				cloud.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " There was an error running the nmap scan - see error log")
-				cloud.WriteErrorLog(instanceType + " " + ipv4 + " " + region + " Error while dispatching scan  : " + err)
+				misc.WriteActivityLog(instanceType + " " + ipv4 + " " + region + " There was an error running the nmap scan - see error log")
+				misc.WriteErrorLog(instanceType + " " + ipv4 + " " + region + " Error while dispatching scan  : " + fmt.Sprint(err))
 				return
 			}
 		}
@@ -95,10 +95,10 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 	}
 	if !sshext.RsyncDirFromHost(nmapDir, localDir, username, ipv4, privateKey) {
 		fmt.Println("done")
-		cloud.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " unale to rsync nmap files")
+		misc.WriteActivityLog(instanceType + " " + ipv4 + " " + region + " unable to rsync nmap files")
 		return
 	}
-	cloud.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " : rsync'd files from host")
+	misc.WriteActivityLog(instanceType + " " + ipv4 + " " + region + " : rsync'd files from host")
 	return
 }
 

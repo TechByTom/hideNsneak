@@ -1,17 +1,14 @@
-package cloud
+package misc
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 	"time"
-
-	yaml "gopkg.in/yaml.v2"
 )
 
-//WriteActivityLog writes general activity to log file
-func WriteActivityLog(text string) {
+//misc.WriteActivityLog writes general activity to log file
+func misc.WriteActivityLog(text string) {
 	//TODO Finalize a path for the activity log
 	f, err := os.OpenFile("activity.log", os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
@@ -25,8 +22,8 @@ func WriteActivityLog(text string) {
 	}
 }
 
-//WriteErrorLog writes application errors to log file
-func WriteErrorLog(text string) bool {
+//misc.WriteErrorLog writes application errors to log file
+func misc.WriteErrorLog(text string) bool {
 	//TODO Finalize a path for the error log
 	f, err := os.OpenFile("error.log", os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
@@ -41,19 +38,6 @@ func WriteErrorLog(text string) bool {
 		return false
 	}
 	return true
-}
-
-func ParseConfig(configFile string) Config {
-	var config Config
-	data, err := ioutil.ReadFile(configFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return config
 }
 
 ///////////////////
