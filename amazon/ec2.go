@@ -45,20 +45,17 @@ func importEC2Key(pubkey string, svc *ec2.EC2) string {
 }
 
 //Terminate EC2 Instances
-func TerminateEC2Instances(regionIDMap map[string][]string, secret string, accessID string) {
-	for region := range regionIDMap {
-		if len(regionIDMap[region]) > 0 {
-			svc := createEC2Session(region, secret, accessID)
-			_, err := svc.TerminateInstances(&ec2.TerminateInstancesInput{
-				InstanceIds: aws.StringSlice(regionIDMap[region]),
-			})
-			if err != nil {
-				log.Println("There was an errror terminating your EC2 instances, go clean it up %s", err)
-			} else {
-				log.Println("Successfully deleted " + region + "instances")
-			}
-		}
+func TerminateEC2Instances(region string, instanceId string, secret string, accessID string) bool, err {
+	svc := createEC2Session(region, secret, accessID)
+	_, err := svc.TerminateInstances(&ec2.TerminateInstancesInput{
+		InstanceIds: aws.StringSlice([]string{instanceId}),
+	})
+	if err != nil {
+		log.Println("There was an errror terminating your EC2 instances, go clean it up %s", err)
+		return false, err
 	}
+	log.Println("Successfully deleted " + region + "instances")
+	return true, nil
 }
 
 //Deploy EC2 images by region
@@ -115,9 +112,7 @@ func ec2RegionMap(regionList []*ec2.Region, count int, imageIDList []string) []E
 }
 
 //Deploy multiple EC2 instances across regions and return Instance
-func DeployMultipleEC2(secret string, accessID string, regionList []string, imageIDList []string, number int, publicKey string, instanceType string) ([]*ec2.Instance, map[string][]string) {
-	terminationMap := make(map[string][]string)
-
+func DeployMultipleEC2(secret string, accessID string, regionList []string, imageIDList []string, number int, publicKey string, instanceType string) []*ec2.Instance {
 	svc := createEC2Session(regionList[0], secret, accessID)
 	describedRegions, err := svc.DescribeRegions(&ec2.DescribeRegionsInput{
 		RegionNames: aws.StringSlice(regionList),
@@ -126,7 +121,6 @@ func DeployMultipleEC2(secret string, accessID string, regionList []string, imag
 		log.Println("Unable to describe AWS regions", err)
 		os.Exit(1)
 	}
-	var tempArray []string
 	ec2Configs := ec2RegionMap(describedRegions.Regions, number, imageIDList)
 	var ec2Instances []*ec2.Instance
 	for _, ec2 := range ec2Configs {
@@ -136,14 +130,9 @@ func DeployMultipleEC2(secret string, accessID string, regionList []string, imag
 				log.Println("Error creating instances for region: " + ec2.Region)
 			} else {
 				ec2Instances = append(ec2Instances, tempInstances...)
-				terminationMap[ec2.Region] = tempArray
-				for _, q := range tempInstances {
-					terminationMap[ec2.Region] = append(terminationMap[ec2.Region], *q.InstanceId)
-				}
-
 			}
 		}
 	}
 
-	return ec2Instances, terminationMap
+	return ec2Instances
 }

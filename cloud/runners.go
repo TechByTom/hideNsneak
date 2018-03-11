@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/rmikehodges/SneakyVulture/drone"
-	"github.com/rmikehodges/SneakyVulture/nmap"
-	"github.com/rmikehodges/SneakyVulture/sshext"
+	"github.com/rmikehodges/hideNsneak/drone"
+	"github.com/rmikehodges/hideNsneak/nmap"
+	"github.com/rmikehodges/hideNsneak/sshext"
 )
 
 //Proxies//
@@ -16,6 +16,7 @@ func CreateSOCKS(Instances []*Instance, startPort int) (string, string) {
 	for _, instance := range Instances {
 		instance.Proxy.SOCKSActive, instance.Proxy.Process = sshext.CreateSingleSOCKS(instance.SSH.PrivateKey, instance.SSH.Username, instance.Cloud.IPv4, counter)
 		if instance.Proxy.SOCKSActive {
+			WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " SOCKS Created")
 			instance.Proxy.SOCKSPort = strconv.Itoa(counter)
 			socksConf[counter] = instance.Cloud.IPv4
 			counter = counter + 1
@@ -25,6 +26,7 @@ func CreateSOCKS(Instances []*Instance, startPort int) (string, string) {
 
 	proxychains := sshext.PrintProxyChains(socksConf)
 	socksd := sshext.PrintSocksd(socksConf)
+
 	return proxychains, socksd
 }
 
@@ -40,7 +42,7 @@ func RunConnectScans(instances []*Instance, output string, additionalOpts string
 		nmapTargeting := nmap.RandomizeIPPortsToHosts(len(instances), ipPorts)
 		for i, instance := range instances {
 			go nmap.InitiateConnectScan(instance.SSH.Username, instance.Cloud.IPv4, instance.SSH.PrivateKey, nmapTargeting[i],
-				instance.Cloud.HomeDir, localDir, additionalOpts, evasive)
+				instance.Cloud.HomeDir, localDir, additionalOpts, evasive, inhstance.Cloud.Type, innstance.Cloud.Region)
 		}
 	}
 	// else {

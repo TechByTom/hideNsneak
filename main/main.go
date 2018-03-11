@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rmikehodges/SneakyVulture/cloud"
-	"github.com/rmikehodges/SneakyVulture/sshext"
+	"github.com/rmikehodges/hideNsneak/cloud"
+	"github.com/rmikehodges/hideNsneak/sshext"
 )
 
 //Cloud Proxy Tool

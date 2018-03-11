@@ -55,14 +55,14 @@ func GetDOIP(token string, id int) string {
 	return IP
 }
 
-func DestroyDOInstance(token string, machineID int) bool {
+func DestroyDOInstance(token string, machineID int) bool, err {
 	client := newDOClient(token)
 	_, err := client.Droplets.Delete(context.TODO(), machineID)
 	if err != nil {
 		log.Printf("There was an error destroying the following machine, you may need to do cleanup:\n%d", machineID)
-		return false
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 //Helper method for now

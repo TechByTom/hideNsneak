@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rmikehodges/SneakyVulture/sshext"
+	"github.com/rmikehodges/hideNsneak/sshext"
 	"golang.org/x/crypto/ssh"
 	// "os/exec"
 )

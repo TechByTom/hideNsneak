@@ -12,9 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/digitalocean/godo"
-	"github.com/rmikehodges/SneakyVulture/amazon"
-	"github.com/rmikehodges/SneakyVulture/do"
-	"github.com/rmikehodges/SneakyVulture/sshext"
+	"github.com/rmikehodges/hideNsneak/amazon"
+	"github.com/rmikehodges/hideNsneak/do"
+	"github.com/rmikehodges/hideNsneak/sshext"
 )
 
 type Config struct {
@@ -116,20 +116,21 @@ func (instance Instance) String() string {
 
 //Detail() prints all information about the instance
 func (instance Instance) Detail() string {
-
+	return ""
 }
 
 //Start, Stop, Initialize
-func StartInstances(config Config, providerMap [string]int) ([]*Instance, map[string][]string) {
+func StartInstances(config Config, providerMap map[string]int) ([]*Instance, map[string][]string) {
 	var cloudInstances []Instance
 	var instanceArray []*Instance
 	var terminationMap map[string][]string
 	var ec2Instances []*ec2.Instance
 
 	for provider, count := range providerMap {
+		//Instance Creation
 		switch provider {
 		case "AWS":
-			ec2Instances, terminationMap = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID,
+			ec2Instances = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID,
 				splitOnComma(config.AWS.Regions), splitOnComma(config.AWS.ImageIDs), count,
 				config.PublicKey, config.AWS.Type)
 			cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances, terminationMap)...)
@@ -148,31 +149,63 @@ func StartInstances(config Config, providerMap [string]int) ([]*Instance, map[st
 	if len(cloudInstances) > 0 {
 		fmt.Println("Waiting a few seconds for all instances to initialize...")
 		time.Sleep(60 * time.Second)
+
 		for i := range cloudInstances {
 			instanceArray = append(instanceArray, &cloudInstances[i])
 		}
+
 		getIPAddresses(instanceArray, config)
+
+		//Logging Creation of instances
+		for _, instance := range instanceArray {
+			WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " created")
+		}
 	}
+
 	return instanceArray, terminationMap
 }
 
+//TODO: Add Stopping of Google and Azure instances
 func StopInstances(config Config, allInstances []*Instance) {
+
 	for _, instance := range allInstances {
-		if instance.Cloud.Type == "DO" {
+		switch instance.Cloud.Type {
+		case "DO":
 			id, _ := strconv.Atoi(instance.Cloud.ID)
-			do.DestroyDOInstance(config.DO.Token, id)
+			if err := do.DestroyDOInstance(config.DO.Token, instance.Cloud.ID) != nil {
+				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
+			} else {
+				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
+				WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + err)
+			}
+		case "AWS":
+			if err := amazon.TerminateInstances(instance.) != nil {
+				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
+			} else {
+				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
+				WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + err)
+			}
+		case "Google":
+		case "Azure":
 		}
 	}
+	stopSocks(allInstances)
 	fmt.Println("About to terminate")
-	amazon.TerminateEC2Instances(config.AWS.Termination, config.AWS.Secret, config.AWS.AccessID)
+	//
+}
+
+//stopSocks loops through a set of instances and kills their SOCKS processes
+func stopSOCKS(allInstances []*Instance) {
 	for _, instance := range allInstances {
 		if instance.Proxy.SOCKSActive == true && instance.Proxy.Process != nil {
-			error := instance.Proxy.Process.Kill()
-			instance.Proxy.SOCKSActive = false
-			if error != nil {
-				fmt.Println("Error killing socks process")
-				fmt.Println(error)
+			err := instance.Proxy.Process.Kill()
+			if err != nil {
+				WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " SOCKS not destroyed- see error log")
+				WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + "Error killing SOCKS process:" + err)
+				continue
 			}
+			instance.Proxy.SOCKSActive = false
+			WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " : SOCKS destroyed":)
 		}
 	}
 }
