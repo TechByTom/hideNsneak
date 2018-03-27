@@ -30,14 +30,7 @@ func PublicKeyFile(file string) ssh.AuthMethod {
 
 //
 func SetHomeDir(ipv4 string, username string, privateKey string) string {
-	sshConfig := &ssh.ClientConfig{
-		User: username,
-		Auth: []ssh.AuthMethod{
-			PublicKeyFile(privateKey),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-	workingDir := ExecuteCmd("pwd", ipv4, sshConfig)
+	workingDir := ExecuteCmd("pwd", ipv4, username, privateKey)
 	homedir := strings.TrimSpace(workingDir)
 	return homedir
 }
@@ -136,18 +129,33 @@ func ShellSystem(ipv4 string, username string, privateKey string) {
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		str, _ := reader.ReadString('\n')
-		fmt.Println(str)
-		fmt.Println(str)
 		if str == "quit\n" {
 			return
 		}
+
+		//TODO: Play with this a little later
 		fmt.Fprint(in, str)
 	}
 }
 
-func ExecuteCmd(cmd string, ipv4 string, config *ssh.ClientConfig) string {
-	conn, _ := ssh.Dial("tcp", ipv4+":22", config)
-	session, _ := conn.NewSession()
+func ExecuteCmd(cmd string, ipv4 string, username string, privateKey string) string {
+	sshConfig := &ssh.ClientConfig{
+		User: username,
+		Auth: []ssh.AuthMethod{
+			PublicKeyFile(privateKey),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+	fmt.Println(sshConfig)
+
+	conn, err := ssh.Dial("tcp", ipv4+":22", sshConfig)
+	if err != nil {
+		fmt.Printf("Error on conn statement %s", err)
+	}
+	session, err := conn.NewSession()
+	if err != nil {
+		fmt.Printf("Error on sessipn statement %s", err)
+	}
 	defer session.Close()
 
 	var stdoutBuf bytes.Buffer
@@ -157,8 +165,17 @@ func ExecuteCmd(cmd string, ipv4 string, config *ssh.ClientConfig) string {
 	return stdoutBuf.String()
 }
 
-func ExecuteBackgroundCmd(cmd string, ipv4 string, config *ssh.ClientConfig) string {
-	conn, _ := ssh.Dial("tcp", ipv4+":22", config)
+func ExecuteBackgroundCmd(cmd string, ipv4 string, username string, privateKey string) string {
+	sshConfig := &ssh.ClientConfig{
+		User: username,
+		Auth: []ssh.AuthMethod{
+			PublicKeyFile(privateKey),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+	fmt.Println(sshConfig)
+
+	conn, _ := ssh.Dial("tcp", ipv4+":22", sshConfig)
 	session, _ := conn.NewSession()
 	defer session.Close()
 

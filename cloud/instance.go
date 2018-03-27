@@ -3,6 +3,7 @@ package cloud
 //Structs in use throughout the application//
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
@@ -14,7 +15,8 @@ import (
 	"github.com/digitalocean/godo"
 	"github.com/rmikehodges/hideNsneak/amazon"
 	"github.com/rmikehodges/hideNsneak/do"
-	"github.com/rmikehodges/hideNsneak/sshext"
+	"github.com/rmikehodges/hideNsneak/misc"
+	yaml "gopkg.in/yaml.v2"
 )
 
 //Notes:
@@ -103,13 +105,18 @@ type Instance struct {
 	}
 }
 
-type Firewall struct {
-	Instances	[]*Instance
-	PortMap 	map[string][]int
+//RegionalFirewall is a struct
+//WHAT DOES THIS DO?
+type RegionalFirewall struct {
+	RegionPortMap map[string](map[string][]int)
 }
 
-func ParseConfig(configFile string) Config {
-	var config Config
+type Firewall struct {
+	FirewallType map[string]RegionalFirewall
+}
+
+func ParseConfig(configFile string) *Config {
+	var config *Config
 	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		log.Fatal(err)
@@ -129,10 +136,11 @@ func (instance Instance) String() string {
 		socksPort = instance.Proxy.SOCKSPort
 	}
 	if instance.Nmap.NmapActive {
-		nmapActive := "Y"
+		nmapActive = "Y"
 	}
-	fmt.Printf("Type: %s | IP: %s | Region: %s | Nmap Active: %s | SOCKS: %s", instance.Cloud.Type, instance.Cloud.IPv4,
+	returnString := fmt.Sprintf("Type: %s | IP: %s | Region: %s | Nmap Active: %s | SOCKS: %s", instance.Cloud.Type, instance.Cloud.IPv4,
 		instance.Cloud.Region, nmapActive, socksPort)
+	return returnString
 }
 
 //Detail() prints all information about the instance
@@ -141,10 +149,9 @@ func (instance Instance) Detail() string {
 }
 
 //Start, Stop, Initialize
-func StartInstances(config Config, providerMap map[string]int) ([]*Instance, map[string][]string) {
+func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 	var cloudInstances []Instance
 	var instanceArray []*Instance
-	var terminationMap map[string][]string
 	var ec2Instances []*ec2.Instance
 
 	for provider, count := range providerMap {
@@ -152,9 +159,9 @@ func StartInstances(config Config, providerMap map[string]int) ([]*Instance, map
 		switch provider {
 		case "AWS":
 			ec2Instances = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID,
-				splitOnComma(config.AWS.Regions), splitOnComma(config.AWS.ImageIDs), count,
+				misc.SplitOnComma(config.AWS.Regions), misc.SplitOnComma(config.AWS.ImageIDs), count,
 				config.PublicKey, config.AWS.Type)
-			cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances, terminationMap)...)
+			cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances)...)
 		case "DO":
 			doInstances := do.DeployDO(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug,
 				config.DO.Fingerprint, count, config.DO.Name)
@@ -183,60 +190,86 @@ func StartInstances(config Config, providerMap map[string]int) ([]*Instance, map
 		}
 	}
 
-	return instanceArray, terminationMap
+	Initialize(instanceArray, config)
+
+	return instanceArray
 }
 
 //TODO: Add Stopping of Google and Azure instances
-func StopInstances(config Config, allInstances []*Instance) {
-
+func StopInstances(config *Config, allInstances []*Instance) {
 	for _, instance := range allInstances {
 		switch instance.Cloud.Type {
 		case "DO":
+			fmt.Println("DO")
 			id, _ := strconv.Atoi(instance.Cloud.ID)
-			if err := do.DestroyDOInstance(config.DO.Token, instance.Cloud.ID) != nil {
-				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
-			} else {
+			if _, err := do.DestroyDOInstance(config.DO.Token, id); err != nil {
+				fmt.Println(instance.String() + " not destroyed properly")
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
-				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + err)
+				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+			} else {
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
 			}
 		case "AWS":
-			if err := amazon.TerminateInstances(instance.) != nil {
-				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
-			} else {
+			fmt.Println("AMAZON")
+			if err := amazon.TerminateInstance(instance.Cloud.Region, instance.Cloud.ID, config.AWS.Secret, config.AWS.AccessID); err != nil {
+				fmt.Println(instance.String() + " not destroyed properly")
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
-				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + err)
+				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+			} else {
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
 			}
 		case "Google":
 			//TODO: Implement stopping of google
+			fmt.Println("Implement Google")
 		case "Azure":
 			//TODOL Implement Stopping of Azure
+			fmt.Println("Implement Azure")
+		default:
+			fmt.Println("Implement default")
+		}
+		if instance.Proxy.SOCKSActive {
+			if stopSingleSOCKS(instance) == false {
+				fmt.Println("Error: SOCKS Proxy not killed for " + instance.Cloud.IPv4 + " check application logs")
+			}
 		}
 	}
-	stopSocks(allInstances)
+
 	fmt.Println("About to terminate")
 	//
 }
 
 //stopSocks loops through a set of instances and kills their SOCKS processes
-func stopSOCKS(allInstances []*Instance) {
+func stopAllSOCKS(allInstances []*Instance) {
 	for _, instance := range allInstances {
 		if instance.Proxy.SOCKSActive == true && instance.Proxy.Process != nil {
 			err := instance.Proxy.Process.Kill()
 			if err != nil {
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " SOCKS not destroyed- see error log")
-				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + "Error killing SOCKS process:" + err)
+				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + "Error killing SOCKS process:" + fmt.Sprint(err))
 				continue
 			}
 			instance.Proxy.SOCKSActive = false
-			misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " : SOCKS destroyed":)
+			misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " : SOCKS destroyed")
 		}
 	}
 }
 
-func Initialize(allInstances []*Instance, config Config) {
+func stopSingleSOCKS(instance *Instance) bool {
+	err := instance.Proxy.Process.Kill()
+	if err != nil {
+		misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " SOCKS not destroyed- see error log")
+		misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + "Error killing SOCKS process:" + fmt.Sprint(err))
+		return false
+	}
+	instance.Proxy.SOCKSActive = false
+	misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " : SOCKS destroyed")
+	return true
+}
+
+func Initialize(allInstances []*Instance, config *Config) {
 	for _, instance := range allInstances {
 		instance.SSH.PrivateKey = strings.Split(config.PublicKey, ".pub")[0]
-		instance.Cloud.HomeDir = sshext.SetHomeDir(instance.Cloud.IPv4, instance.SSH.Username, instance.SSH.PrivateKey)
+		// instance.Cloud.HomeDir = sshext.SetHomeDir(instance.Cloud.IPv4, instance.SSH.Username, instance.SSH.PrivateKey)
 		instance.Proxy.SOCKSActive = false
 		instance.CobaltStrike.TeamserverEnabled = false
 		instance.Nmap.NmapActive = false
@@ -245,7 +278,7 @@ func Initialize(allInstances []*Instance, config Config) {
 }
 
 //Converting Custom cloud objects to Instance objects
-func dropletsToInstances(droplets []godo.Droplet, config Config) []Instance {
+func dropletsToInstances(droplets []godo.Droplet, config *Config) []Instance {
 	var Instances []Instance
 	for _, drop := range droplets {
 
@@ -265,19 +298,17 @@ func dropletsToInstances(droplets []godo.Droplet, config Config) []Instance {
 	return Instances
 }
 
-func ec2ToInstance(runResult []*ec2.Instance, regionMap map[string][]string) (ec2Instances []Instance) {
+func ec2ToInstance(runResult []*ec2.Instance) (ec2Instances []Instance) {
 	var ec2Instance Instance
-	for region, instanceIDs := range regionMap {
-		for _, instance := range runResult {
-			if contains(instanceIDs, *instance.InstanceId) {
-				ec2Instance.Cloud.ID = aws.StringValue(instance.InstanceId)
-				ec2Instance.Cloud.IPv4 = aws.StringValue(instance.PublicIpAddress)
-				ec2Instance.Cloud.Type = "EC2"
-				ec2Instance.SSH.Username = "ubuntu"
-				ec2Instance.Cloud.Region = region
-				ec2Instances = append(ec2Instances, ec2Instance)
-			}
-		}
+	for _, instance := range runResult {
+		availZone := aws.StringValue(instance.Placement.AvailabilityZone)
+		region := availZone[:len(availZone)-1]
+		ec2Instance.Cloud.ID = aws.StringValue(instance.InstanceId)
+		ec2Instance.Cloud.IPv4 = aws.StringValue(instance.PublicIpAddress)
+		ec2Instance.Cloud.Type = "AWS"
+		ec2Instance.SSH.Username = "ubuntu"
+		ec2Instance.Cloud.Region = region
+		ec2Instances = append(ec2Instances, ec2Instance)
 	}
 	return
 }
@@ -286,7 +317,7 @@ func (config *Config) updateTermination(terminationMap map[string][]string) {
 	config.AWS.Termination = terminationMap
 }
 
-func getIPAddresses(allInstances []*Instance, config Config) {
+func getIPAddresses(allInstances []*Instance, config *Config) {
 	for _, instance := range allInstances {
 		if instance.Cloud.Type == "EC2" {
 			instance.Cloud.IPv4 = amazon.GetEC2IP(instance.Cloud.Region, config.AWS.Secret, config.AWS.AccessID, instance.Cloud.ID)

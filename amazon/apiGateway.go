@@ -2,7 +2,6 @@ package amazon
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -152,35 +151,7 @@ func commandOutput(apiOutput ApigatewayOutput, url string) {
 	fmt.Println("")
 }
 
-func verifyVariables(awsID string, awsSecret string, apiName string, url string) bool {
-	if awsID == "" {
-		flag.Usage()
-		return false
-	}
-	if awsSecret == "" {
-		flag.Usage()
-		return false
-	}
-	if apiName == "" {
-		flag.Usage()
-		return false
-	}
-	if url == "" {
-		flag.Usage()
-		return false
-	}
-	return true
-}
-
 // func gateway() {
-// 	awsID := flag.String("id", "", "AWS Access Key ID (Required)")
-// 	awsSecret := flag.String("secret", "", "AWS API Secret (Required)")
-// 	region := flag.String("region", "us-east-1", "AWS region to deploy - (Default: us-east-1)")
-// 	desc := flag.String("description", "API Gateway", "Description of your API - (Default: API Gateway)")
-// 	apiName := flag.String("api", "", "Name to give your new API (Required)")
-// 	url := flag.String("url", "", "Target URL (Required)")
-// 	stageName := flag.String("stage", "test", "Stage name to use (Default: test)")
-// 	flag.Parse()
 // 	if verifyVariables(*awsID, *awsSecret, *apiName, *url) {
 // 		//Create new APIGateway
 // 		svc := createGateway(*region, *awsID, *awsSecret)

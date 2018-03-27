@@ -10,28 +10,20 @@ import (
 
 	"github.com/rmikehodges/hideNsneak/misc"
 	"github.com/rmikehodges/hideNsneak/sshext"
-	"golang.org/x/crypto/ssh"
 )
 
 func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTargets map[int][]string,
 	homedir string, localDir string, additionOpts string, evasive bool, region string, instanceType string) {
-	sshConfig := &ssh.ClientConfig{
-		User: username,
-		Auth: []ssh.AuthMethod{
-			sshext.PublicKeyFile(privateKey),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
 	fmt.Println("Installing nmap")
 	sshext.ExecuteCmd(`sudo apt-get update;
 		sudo apt-get install -y nmap;
-		sudo apt-get install -y screen`, ipv4, sshConfig)
+		sudo apt-get install -y screen`, ipv4, username, privateKey)
 
 	fmt.Println("Successfully installed Nmap")
 
 	nmapDir := homedir + "/" + ipv4 + "-nmap"
 	fmt.Println("Making directory")
-	sshext.ExecuteCmd("mkdir "+nmapDir, ipv4, sshConfig)
+	sshext.ExecuteCmd("mkdir "+nmapDir, ipv4, username, privateKey)
 	if evasive {
 		for port, ipList := range nmapTargets {
 			portString := strconv.Itoa(port)
@@ -93,7 +85,7 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 		// }
 
 	}
-	if !sshext.RsyncDirFromHost(nmapDir, localDir, username, ipv4, privateKey) {
+	if sshext.RsyncDirFromHost(nmapDir, localDir, username, ipv4, privateKey) != nil {
 		fmt.Println("done")
 		misc.WriteActivityLog(instanceType + " " + ipv4 + " " + region + " unable to rsync nmap files")
 		return
@@ -117,16 +109,9 @@ func ListNmapXML(nmapDir string) []string {
 }
 
 func CheckNmapProcess(ipv4 string, username string, privateKey string, nmapCmd string) (string, bool) {
-	sshConfig := &ssh.ClientConfig{
-		User: username,
-		Auth: []ssh.AuthMethod{
-			sshext.PublicKeyFile(privateKey),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
 	grepString := "ps aux | grep '" + nmapCmd + "' | grep -v grep | awk '{print $2}'"
 
-	process := sshext.ExecuteCmd(grepString, ipv4, sshConfig)
+	process := sshext.ExecuteCmd(grepString, ipv4, username, privateKey)
 
 	proccessList := strings.Split(process, "\n")
 

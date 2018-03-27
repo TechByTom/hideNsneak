@@ -23,9 +23,13 @@ type EC2Config struct {
 
 func GetEC2IP(region string, secret string, accessID string, instanceId string) string {
 	svc := createEC2Session(region, secret, accessID)
-	result, _ := svc.DescribeInstances(&ec2.DescribeInstancesInput{
+
+	result, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
 		InstanceIds: aws.StringSlice([]string{instanceId}),
 	})
+	if err != nil {
+		log.Printf("Error describing instances while fetching IP address: %s", err)
+	}
 	return aws.StringValue(result.Reservations[0].Instances[0].PublicIpAddress)
 }
 
@@ -45,17 +49,17 @@ func importEC2Key(pubkey string, svc *ec2.EC2) string {
 }
 
 //Terminate EC2 Instances
-func TerminateEC2Instances(region string, instanceId string, secret string, accessID string) bool, err {
+func TerminateInstance(region string, instanceId string, secret string, accessID string) error {
 	svc := createEC2Session(region, secret, accessID)
 	_, err := svc.TerminateInstances(&ec2.TerminateInstancesInput{
 		InstanceIds: aws.StringSlice([]string{instanceId}),
 	})
 	if err != nil {
 		log.Println("There was an errror terminating your EC2 instances, go clean it up %s", err)
-		return false, err
+		return err
 	}
 	log.Println("Successfully deleted " + region + "instances")
-	return true, nil
+	return nil
 }
 
 //Deploy EC2 images by region

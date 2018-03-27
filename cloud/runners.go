@@ -43,7 +43,7 @@ func RunConnectScans(instances []*Instance, output string, additionalOpts string
 		nmapTargeting := nmap.RandomizeIPPortsToHosts(len(instances), ipPorts)
 		for i, instance := range instances {
 			go nmap.InitiateConnectScan(instance.SSH.Username, instance.Cloud.IPv4, instance.SSH.PrivateKey, nmapTargeting[i],
-				instance.Cloud.HomeDir, localDir, additionalOpts, evasive, inhstance.Cloud.Type, innstance.Cloud.Region)
+				instance.Cloud.HomeDir, localDir, additionalOpts, evasive, instance.Cloud.Type, instance.Cloud.Region)
 
 		}
 	}
@@ -66,18 +66,29 @@ func ImportNmaps(localDir string, insecureSSL bool, limitHosts bool, forcePorts 
 	}
 }
 
-func CreateFirewall(instances []*Instance, config Config, ports []int, groupName string, desc string)  {
+func CreateFirewall(instances []*Instance, config Config, ports []int, groupName string, desc string) {
+	firewall := RegionalFirewall{}
 	for _, instance := range instances {
 		switch instance.Cloud.Type {
-		case: "AWS"
-			
-		case: "DO"
-		case: "Google"
-		case: "Azure"
+		case "AWS":
+			firewall.RegionPortMap["AWS"][instance.Cloud.IPv4] = ports
+		case "DO":
+			firewall.RegionPortMap["DO"][instance.Cloud.IPv4] = ports
+		case "Google":
+			firewall.RegionPortMap["Google"][instance.Cloud.IPv4] = ports
+		case "Azure":
+			firewall.RegionPortMap["Azure"][instance.Cloud.IPv4] = ports
 		default:
 			fmt.Println("Unknown instance type, skpping")
 		}
 	}
+	//Don't know what this is used for
+	// for _, firewallType := range firewall.RegionPortMap {
+	// 	switch firewallType {
+	// 	case "AWS":
+	// 	}
+	// }
+
 }
 
 // //This doesn't work very well
