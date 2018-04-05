@@ -87,26 +87,342 @@ func main() {
 		command, _ := reader.ReadString('\n')
 		switch strings.TrimSpace(command) {
 		case "deploy":
-			freshDeploy := deployUI(config)
-			allInstances = append(allInstances, freshDeploy...)
+			//Deployment Procedure
+			reader := bufio.NewReader(os.Stdin)
+			var providerArray []string
+			var providers string
+			var count int
+			var err error
+			for {
+				fmt.Print("<hideNsneak> Enter the cloud providers you would like to use [Default: AWS,DO]: ")
+				providers, _ = reader.ReadString('\n')
+				providers = strings.TrimSpace(providers)
+				if providers == "" {
+					providerArray = []string{"AWS", "DO"}
+				} else {
+					providerArray = strings.Split(providers, ",")
+					if providerCheck(providerArray) {
+						break
+					}
+				}
+			}
+			for {
+				fmt.Print("<hideNSneak> Enter the number of servers to deploy: ")
+				countString, _ := reader.ReadString('\n')
+				countString = strings.TrimSpace(countString)
+				count, err = strconv.Atoi(countString)
+				if err != nil {
+					fmt.Println("<hideNSneak> Err: Not an Integer  ")
+					continue
+				}
+				break
+			}
+			providerMap := make(map[string]int)
+			division := count / len(providerArray)
+			remainder := count % len(providerArray)
+
+			for _, p := range providerArray {
+				providerMap[p] = division
+			}
+
+			if remainder != 0 {
+				for p := range providerMap {
+					providerMap[p] = providerMap[p] + 1
+					remainder = remainder - 1
+					if remainder == 0 {
+						break
+					}
+				}
+			}
+
+			instanceArray := cloud.StartInstances(config, providerMap)
+			allInstances = append(allInstances, instanceArray...)
 			//TODO: Update termination map
 		case "destroy":
-			allInstances = destroyUI(allInstances, config)
+			reader := bufio.NewReader(os.Stdin)
+			tempInstances := []*cloud.Instance{}
+			var instanceArray []string
+			listUI(allInstances)
+
+			newInstanceList := []*cloud.Instance{}
+
+			for {
+				fmt.Println("<hideNSneak> Enter a comma seperated list of servers to destroy [Default: all]")
+				instanceString, _ := reader.ReadString('\n')
+				instanceString = strings.TrimSpace(instanceString)
+
+				instanceArray = strings.Split(instanceString, ",")
+
+				if misc.ValidateIntArray(instanceArray) == false && instanceArray[0] != "" {
+					fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
+					continue
+				}
+				break
+			}
+			//Creating List for destruction
+			if instanceArray[0] != "" {
+				fmt.Println(instanceArray)
+				for _, p := range instanceArray {
+					fmt.Println(p)
+					index, _ := strconv.Atoi(p)
+
+					if index >= len(allInstances) {
+						fmt.Println("<hideNSneak> Index is larger than the instance array. Skipping index: " + strconv.Itoa(index))
+						continue
+					}
+
+					tempInstances = append(tempInstances, allInstances[index])
+					//TODO: Fix this logic on deletion, newInstanceList should properly reflect removal of certain assets
+					if index < len(allInstances)-1 {
+						if index == 0 && len(newInstanceList) == 1 {
+							fmt.Println("")
+							newInstanceList = []*cloud.Instance{}
+							continue
+						}
+						if index == 0 {
+							newInstanceList = append(newInstanceList, allInstances[1:]...)
+						} else {
+							newInstanceList = append(newInstanceList[:index], newInstanceList[index+1:]...)
+						}
+					} else {
+						newInstanceList = allInstances[:index]
+					}
+				}
+			} else {
+				tempInstances = allInstances
+			}
+			for {
+				fmt.Println("<hideNSneak> The following servers will be deleted - Is this ok [y/n]")
+				listUI(tempInstances)
+				confirmation, _ := reader.ReadString('\n')
+				confirmation = strings.TrimSpace(confirmation)
+				if strings.ToLower(string(confirmation[0])) == "y" {
+					cloud.StopInstances(config, tempInstances)
+					allInstances = newInstanceList
+					break
+				}
+				if strings.ToLower(string(confirmation[0])) == "n" {
+					break
+				}
+			}
+
 		case "shell":
-			shellUI(allInstances)
+			reader := bufio.NewReader(os.Stdin)
+			listUI(allInstances)
+			fmt.Println("<hideNSneak> Enter the number of the server you wish drop into: ")
+			instanceNum, _ := reader.ReadString('\n')
+			instanceNum = strings.TrimSpace(instanceNum)
+			num, err := strconv.Atoi(strings.TrimSpace(instanceNum))
+			if err != nil {
+				fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
+			}
+			if num > len(allInstances) {
+				fmt.Println("<hideNSneak> That instance does not exist - try spinning some up")
+				return
+			}
+			sshext.ShellSystem(allInstances[num].Cloud.IPv4, allInstances[num].SSH.Username, allInstances[num].SSH.PrivateKey)
 		case "list":
 			listUI(allInstances)
 		case "socks-add":
-			proxychains, socksd = socksUI(allInstances, config)
+			startPort := config.StartPort
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Println("<hideNSneak> Servers:")
+			listUI(allInstances)
+			for {
+				fmt.Print("<hideNSneak> Enter the start port for your SOCKS proxies [Default: Config Value]: ")
+				stringPort, _ := reader.ReadString('\n')
+				stringPort = strings.TrimSpace(stringPort)
+				if stringPort == "" {
+					break
+				}
+				_, err := strconv.Atoi(stringPort)
+				if err != nil {
+					fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
+					continue
+				}
+				break
+			}
+			fmt.Println("<hideNSneak> Enter a comma seperated list of servers to create SOCKS proxies [Default: all]")
+			instanceString, _ := reader.ReadString('\n')
+			instanceString = strings.TrimSpace(instanceString)
+			if instanceString == "" {
+				proxychains, socksd = cloud.CreateSOCKS(allInstances, startPort)
+				config.StartPort = config.StartPort + len(allInstances)
+			} else {
+				instanceArray := strings.Split(instanceString, ",")
+				tempInstances := []*cloud.Instance{}
+				for _, p := range instanceArray {
+					index, _ := strconv.Atoi(p)
+					tempInstances = append(tempInstances, allInstances[index])
+				}
+				proxychains, socksd = cloud.CreateSOCKS(tempInstances, config.StartPort)
+				config.StartPort = config.StartPort + len(tempInstances)
+			}
 		case "socks-remove":
 		case "domainFront":
+		//TODO: Fix port Validation
 		case "nmap":
-			freshDeploy := deployUI(config)
-			allInstances = append(allInstances, freshDeploy...)
-			nmapUI(freshDeploy, config)
+			// freshDeploy := deployUI(config)
 
+			//Deployment Procedure
+			reader := bufio.NewReader(os.Stdin)
+			var providerArray []string
+			var providers string
+			var count int
+			var err error
+			for {
+				fmt.Print("<hideNsneak> Enter the cloud providers you would like to use [Default: AWS,DO]: ")
+				providers, _ = reader.ReadString('\n')
+				providers = strings.TrimSpace(providers)
+				if providers == "" {
+					providerArray = strings.Split("AWS,DO", ",")
+				} else {
+					providerArray = strings.Split(providers, ",")
+					if providerCheck(providerArray) {
+						fmt.Println("HERE")
+						break
+					}
+				}
+			}
+			for {
+				fmt.Print("<hideNSneak> Enter the number of servers to deploy: ")
+				countString, _ := reader.ReadString('\n')
+				countString = strings.TrimSpace(countString)
+				count, err = strconv.Atoi(countString)
+				if err != nil {
+					fmt.Println("<hideNSneak> Err: Not an Integer  ")
+					continue
+				}
+				break
+			}
+			providerMap := make(map[string]int)
+			division := count / len(providerArray)
+			remainder := count % len(providerArray)
+
+			for _, p := range providerArray {
+				providerMap[p] = division
+			}
+
+			if remainder != 0 {
+				for p := range providerMap {
+					providerMap[p] = providerMap[p] + 1
+					remainder = remainder - 1
+					if remainder == 0 {
+						break
+					}
+				}
+			}
+
+			instanceArray := cloud.StartInstances(config, providerMap)
+			allInstances = append(allInstances, instanceArray...)
+
+			// nmapUI(freshDeploy, config)
+			var scopeFile string
+			var ports []string
+			evasive := true
+			reader = bufio.NewReader(os.Stdin)
+			//Add ability to use exisiting servers
+			//Gathering Ports and Port validation
+			for {
+				// var portCheck int
+				var err error
+				fmt.Print("<hideNSneak> Enter comma-seperated list of ports [ex. 80,443,8080-8082]")
+				portString, _ := reader.ReadString('\n')
+				portArray := strings.Split(portString, ",")
+
+				var tempPorts string
+				for _, port := range portArray {
+					if strings.Contains(port, "-") {
+						portRange := strings.Split(port, "-")
+						startPort, _ := strconv.Atoi(portRange[0])
+						stopPort, _ := strconv.Atoi(portRange[1])
+						for i := startPort; i <= stopPort; i++ {
+							tempPorts = tempPorts + strconv.Itoa(i) + ","
+						}
+					}
+					tempPorts = tempPorts + port
+				}
+
+				tempPorts = tempPorts[:len(tempPorts)-1]
+				portArray = strings.Split(tempPorts, ",")
+
+				// for _, port := range portArray {
+				// 	portCheck, err = strconv.Atoi(port)
+				// 	if err != nil | portCheck > 65535 | portCheck < 1 {
+				// 		break
+				// 	}
+				// }
+
+				if err != nil {
+					fmt.Println("<hideNSneak>Invalid Integer, one of your ports is not valid")
+					continue
+				}
+				// if port > 65535 | port < 1 {
+				// 	fmt.Println("<hideNSneak>Invalid Integer, one of your ports is not in the valid range 1-65535")
+				// 	continue
+				// }
+				err = nil
+				// ports := portArray
+				break
+			}
+			//Scope gathering and Scope file validation
+			for {
+				fmt.Print("<hideNSneak>Enter the file path for the scope file")
+				scope, _ := reader.ReadString('\n')
+				scope = strings.TrimSpace(scope)
+				_, err := os.Stat(scope)
+				if err != nil {
+					if os.IsNotExist(err) {
+						fmt.Println("<hideNSneak>File Error - Specified file does not exist")
+						continue
+					}
+				}
+				file, err := os.OpenFile("test.txt", os.O_RDONLY, 0666)
+				if err != nil {
+					if os.IsPermission(err) {
+						fmt.Println("<hideNSneak>File Error - Read access denied")
+						continue
+					}
+				}
+				file.Close()
+				// scopeFile := scope
+				break
+			}
+			fmt.Print("<hideNSneak>Enter the base name for the nmap files: ")
+			baseName, _ := reader.ReadString('\n')
+			baseName = strings.TrimSpace(baseName)
+			var additionalOpts string
+			for {
+				fmt.Print("<hideNSneak>Enter the additional Nmap options needed: ")
+				additionalOpts, _ = reader.ReadString('\n')
+				fmt.Println("<hideNSneak>Your resulting command:")
+				fmt.Println("<hideNSneak>nmap -iL " + scopeFile + "-oA" + baseName + "-<timestamp>" + additionalOpts + "-p <ports> <ips>")
+				for {
+					fmt.Print("<hideNSneak> Is this correct? [Y/N/Q]: ")
+					correctNmap, _ := reader.ReadString('\n')
+					switch strings.ToUpper(correctNmap) {
+					case "Y":
+						break
+					case "N":
+						continue
+					case "Q":
+						return
+					default:
+						fmt.Println("<hideNSneak> Please answer Y or N")
+						continue
+					}
+				}
+				break
+			}
+			fmt.Print("<hideNSneak> Would you Nmap to be evasive? [Y/N]: ")
+			evasiveResponse, _ := reader.ReadString('\n')
+			if strings.ToUpper(evasiveResponse) == "N" {
+				evasive = false
+			}
+			//TODO: Add automatic drone-nmap
+			cloud.RunConnectScans(instanceArray, baseName, additionalOpts, evasive, scopeFile,
+				ports, config.NmapDir, false)
 			//TODO: Update Termination Map
-			//Maybe just store termination codes in the instance itself
 		case "proxyconf":
 			fmt.Println("Proxychains:")
 			fmt.Println(proxychains)
@@ -125,296 +441,24 @@ func main() {
 
 }
 
-//TODO: Fix port Validation
-func nmapUI(instances []*cloud.Instance, config *cloud.Config) {
-	var scopeFile string
-	var ports []string
-	evasive := true
-	reader := bufio.NewReader(os.Stdin)
-	//Add ability to use exisiting servers
-	//Gathering Ports and Port validation
-	for {
-		// var portCheck int
-		var err error
-		fmt.Print("<hideNSneak> Enter comma-seperated list of ports [ex. 80,443,8080-8082]")
-		portString, _ := reader.ReadString('\n')
-		portArray := strings.Split(portString, ",")
-
-		var tempPorts string
-		for _, port := range portArray {
-			if strings.Contains(port, "-") {
-				portRange := strings.Split(port, "-")
-				startPort, _ := strconv.Atoi(portRange[0])
-				stopPort, _ := strconv.Atoi(portRange[1])
-				for i := startPort; i <= stopPort; i++ {
-					tempPorts = tempPorts + strconv.Itoa(i) + ","
-				}
-			}
-			tempPorts = tempPorts + port
-		}
-
-		tempPorts = tempPorts[:len(tempPorts)-1]
-		portArray = strings.Split(tempPorts, ",")
-
-		// for _, port := range portArray {
-		// 	portCheck, err = strconv.Atoi(port)
-		// 	if err != nil | portCheck > 65535 | portCheck < 1 {
-		// 		break
-		// 	}
-		// }
-
-		if err != nil {
-			fmt.Println("<hideNSneak>Invalid Integer, one of your ports is not valid")
-			continue
-		}
-		// if port > 65535 | port < 1 {
-		// 	fmt.Println("<hideNSneak>Invalid Integer, one of your ports is not in the valid range 1-65535")
-		// 	continue
-		// }
-		err = nil
-		// ports := portArray
-		break
-	}
-	//Scope gathering and Scope file validation
-	for {
-		fmt.Print("<hideNSneak>Enter the file path for the scope file")
-		scope, _ := reader.ReadString('\n')
-		scope = strings.TrimSpace(scope)
-		_, err := os.Stat(scope)
-		if err != nil {
-			if os.IsNotExist(err) {
-				fmt.Println("<hideNSneak>File Error - Specified file does not exist")
-				continue
-			}
-		}
-		file, err := os.OpenFile("test.txt", os.O_RDONLY, 0666)
-		if err != nil {
-			if os.IsPermission(err) {
-				fmt.Println("<hideNSneak>File Error - Read access denied")
-				continue
-			}
-		}
-		file.Close()
-		// scopeFile := scope
-		break
-	}
-	fmt.Print("<hideNSneak>Enter the base name for the nmap files: ")
-	baseName, _ := reader.ReadString('\n')
-	baseName = strings.TrimSpace(baseName)
-	var additionalOpts string
-	for {
-		fmt.Print("<hideNSneak>Enter the additional Nmap options needed: ")
-		additionalOpts, _ = reader.ReadString('\n')
-		fmt.Println("<hideNSneak>Your resulting command:")
-		fmt.Println("<hideNSneak>nmap -iL " + scopeFile + "-oA" + baseName + "-<timestamp>" + additionalOpts + "-p <ports> <ips>")
-		for {
-			fmt.Print("<hideNSneak> Is this correct? [Y/N/Q]: ")
-			correctNmap, _ := reader.ReadString('\n')
-			switch strings.ToUpper(correctNmap) {
-			case "Y":
-				break
-			case "N":
-				continue
-			case "Q":
-				return
-			default:
-				fmt.Println("<hideNSneak> Please answer Y or N")
-				continue
-			}
-		}
-		break
-	}
-	fmt.Print("<hideNSneak> Would you Nmap to be evasive? [Y/N]: ")
-	evasiveResponse, _ := reader.ReadString('\n')
-	if strings.ToUpper(evasiveResponse) == "N" {
-		evasive = false
-	}
-	//TODO: Add automatic drone-nmap
-	cloud.RunConnectScans(instances, baseName, additionalOpts, evasive, scopeFile,
-		ports, config.NmapDir, false)
-}
-
-//TODO: Add ability to specify regions
-func deployUI(config *cloud.Config) []*cloud.Instance {
-	reader := bufio.NewReader(os.Stdin)
-	var providerArray []string
-	var providers string
-	var count int
-	var err error
-	for {
-		fmt.Print("<hideNsneak> Enter the cloud providers you would like to use [Default: AWS,DO]: ")
-		providers, _ = reader.ReadString('\n')
-		providers = strings.TrimSpace(providers)
-		if providers == "" {
-			providerArray = strings.Split("AWS,DO", ",")
-		} else {
-			providerArray = strings.Split(providers, ",")
-			for _, p := range providerArray {
-				if strings.ToUpper(p) != "AWS" && strings.ToUpper(p) != "DO" {
-					fmt.Println("Unknown Cloud Provider, please check your input..")
-					continue
-				}
-			}
-		}
-		break
-	}
-	for {
-		fmt.Print("<hideNSneak> Enter the number of servers to deploy: ")
-		countString, _ := reader.ReadString('\n')
-		countString = strings.TrimSpace(countString)
-		count, err = strconv.Atoi(countString)
-		if err != nil {
-			fmt.Println("<hideNSneak> Err: Not an Integer  ")
-			continue
-		}
-		break
-	}
-	providerMap := make(map[string]int)
-	division := count / len(providerArray)
-	remainder := count % len(providerArray)
-
-	for _, p := range providerArray {
-		providerMap[p] = division
-	}
-
-	if remainder != 0 {
-		for p := range providerMap {
-			providerMap[p] = providerMap[p] + 1
-			remainder = remainder - 1
-			if remainder == 0 {
-				break
-			}
-		}
-	}
-
-	instanceArray := cloud.StartInstances(config, providerMap)
-
-	return instanceArray
-}
-
-func destroyUI(instances []*cloud.Instance, config *cloud.Config) []*cloud.Instance {
-	reader := bufio.NewReader(os.Stdin)
-	tempInstances := []*cloud.Instance{}
-	listUI(instances)
-
-	newInstanceList := instances
-
-	for {
-		fmt.Println("<hideNSneak> Enter a comma seperated list of servers to destroy [Default: all]")
-		instanceString, _ := reader.ReadString('\n')
-		instanceString = strings.TrimSpace(instanceString)
-
-		instanceArray := strings.Split(instanceString, ",")
-
-		if misc.ValidateIntArray(instanceArray) == false {
-			fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
-			continue
-		}
-
-		//Creating List for destruction
-		for _, p := range instanceArray {
-			index, _ := strconv.Atoi(p)
-			tempInstances = append(tempInstances, instances[index])
-			if index != len(instanceArray)-1 {
-				if index == 0 {
-					newInstanceList = newInstanceList[1:]
-				} else {
-					newInstanceList = append(newInstanceList[:index], newInstanceList[index+1:]...)
-				}
-			} else {
-				newInstanceList = newInstanceList[:index]
-			}
-		}
-
-		fmt.Println("<hideNSneak> The following servers will be deleted - Is this ok [y/n]")
-		listUI(tempInstances)
-		confirmation, _ := reader.ReadString('\n')
-		confirmation = strings.TrimSpace(confirmation)
-		if confirmation == "" {
-			continue
-		}
-		if strings.ToLower(string(confirmation[0])) == "n" {
-			continue
-		}
-
-		break
-	}
-	fmt.Println(tempInstances)
-	cloud.StopInstances(config, tempInstances)
-	return newInstanceList
-}
-
 func listUI(instances []*cloud.Instance) {
 	for num, instance := range instances {
 		fmt.Printf("%d : %s \n", num, instance.String())
 	}
 }
 
-func shellUI(instances []*cloud.Instance) {
-	reader := bufio.NewReader(os.Stdin)
-	listUI(instances)
-	fmt.Println("<hideNSneak> Enter the number of the server you wish drop into: ")
-	instanceNum, _ := reader.ReadString('\n')
-	instanceNum = strings.TrimSpace(instanceNum)
-	num, err := strconv.Atoi(strings.TrimSpace(instanceNum))
-	if err != nil {
-		fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
+func providerCheck(providerArray []string) bool {
+	for _, p := range providerArray {
+		if strings.ToUpper(p) != "AWS" && strings.ToUpper(p) != "DO" {
+			fmt.Println("Unknown Cloud Provider, please check your input..")
+			return false
+		}
 	}
-	if num > len(instances) {
-		fmt.Println("<hideNSneak> That instance does not exist - try spinning some up")
-		return
-	}
-	sshext.ShellSystem(instances[num].Cloud.IPv4, instances[num].SSH.Username, instances[num].SSH.PrivateKey)
+	return true
 }
-
-func socksUI(instances []*cloud.Instance, config *cloud.Config) (string, string) {
-	var proxychains string
-	var socksd string
-	startPort := config.StartPort
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("<hideNSneak> Servers:")
-	listUI(instances)
-	for {
-		fmt.Print("<hideNSneak> Enter the start port for your SOCKS proxies [Default: Config Value]: ")
-		stringPort, _ := reader.ReadString('\n')
-		stringPort = strings.TrimSpace(stringPort)
-		if stringPort == "" {
-			break
-		}
-		_, err := strconv.Atoi(stringPort)
-		if err != nil {
-			fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
-			continue
-		}
-		break
-	}
-	fmt.Println("<hideNSneak> Enter a comma seperated list of servers to create SOCKS proxies [Default: all]")
-	instanceString, _ := reader.ReadString('\n')
-	instanceString = strings.TrimSpace(instanceString)
-	if instanceString == "" {
-		proxychains, socksd = cloud.CreateSOCKS(instances, startPort)
-		config.StartPort = config.StartPort + len(instances)
-	} else {
-		instanceArray := strings.Split(instanceString, ",")
-		tempInstances := []*cloud.Instance{}
-		for _, p := range instanceArray {
-			index, _ := strconv.Atoi(p)
-			tempInstances = append(tempInstances, instances[index])
-		}
-		proxychains, socksd = cloud.CreateSOCKS(tempInstances, config.StartPort)
-		config.StartPort = config.StartPort + len(tempInstances)
-	}
-	return proxychains, socksd
-}
-
-//Priorities:
-// 1. Interface
-// 2. Log all the things
-// 3. Add ability to import existing instances
-// 4. Finish Cloudfronting
-
-//I'm going to have to a abstract the logging away from the cloud package
 
 // 2. Finish Security Groups and Firewalls for DO/AWS
-// 4. Add ability to stop/start EC2 instances
-// 5.
+
+//TODO: Add Push File
+//TODO: Add instance import
+//TODO: Add Stop Instance functionality on AWS,DO,Google
