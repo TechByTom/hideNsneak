@@ -123,4 +123,4 @@ func CheckNmapProcess(ipv4 string, username string, privateKey string, nmapCmd s
 	}
 }
 
-//NOTES: Max parallel host size to 1 for more resillient scans based on time window
+//NOTES: Max parallel host size to lower for more resillient scans based on time window

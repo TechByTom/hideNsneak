@@ -15,6 +15,7 @@ import (
 	"github.com/digitalocean/godo"
 	"github.com/rmikehodges/hideNsneak/amazon"
 	"github.com/rmikehodges/hideNsneak/do"
+	"github.com/rmikehodges/hideNsneak/google"
 	"github.com/rmikehodges/hideNsneak/misc"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -40,6 +41,7 @@ type Config struct {
 		Number         int    `yaml:"number"`
 		Termination    map[string][]string
 		SecurityGroups map[string][]string
+		Username       string
 	} `yaml:"AWS"`
 	DO struct {
 		Token       string `yaml:"token"`
@@ -49,6 +51,7 @@ type Config struct {
 		Memory      string `yaml:"memory"`
 		Name        string `yaml:"name"`
 		Number      int    `yaml:"number"`
+		Username    string
 	} `yaml:"DO"`
 	Google struct {
 		ImageFamily  string `yaml:"imageFamily"`
@@ -56,6 +59,8 @@ type Config struct {
 		MachineType  string `yaml:"machineType"`
 		Zones        string `yaml:"zones"`
 		Number       int    `yaml:"number"`
+		Project      string `yaml:"project"`
+		Username     string
 	} `yaml:"Google"`
 }
 
@@ -70,6 +75,8 @@ type Instance struct {
 		Firewalls   []string
 		Domain      string
 		HomeDir     string
+		Name        string
+		State       string
 	}
 	SSH struct {
 		Username   string
@@ -156,12 +163,13 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 
 	for provider, count := range providerMap {
 		//Instance Creation
+		//TODO: Add descriptions
 		switch provider {
 		case "AWS":
 			ec2Instances = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID,
 				misc.SplitOnComma(config.AWS.Regions), misc.SplitOnComma(config.AWS.ImageIDs), count,
 				config.PublicKey, config.AWS.Type)
-			cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances)...)
+			cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances, config.AWS.Username)...)
 		case "DO":
 			doInstances := do.DeployDO(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug,
 				config.DO.Fingerprint, count, config.DO.Name)
@@ -169,14 +177,16 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 		case "Azure":
 			//To be added
 		case "Google":
-			//To be added
+			googleInstances := google.CreateInstances("", config.Customer, count, config.Google.MachineType, config.Google.Zones,
+				config.Google.ImageFamily, config.Google.Project, config.Google.ImageProject, config.PublicKey)
+			cloudInstances = append(cloudInstances, googleToInstance(googleInstances, config.Google.Username)...)
 		default:
 			continue
 		}
 	}
 	if len(cloudInstances) > 0 {
 		fmt.Println("Waiting a few seconds for all instances to initialize...")
-		time.Sleep(60 * time.Second)
+		time.Sleep(30 * time.Second)
 
 		for i := range cloudInstances {
 			instanceArray = append(instanceArray, &cloudInstances[i])
@@ -196,7 +206,7 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 }
 
 //TODO: Add Stopping of Google and Azure instances
-func StopInstances(config *Config, allInstances []*Instance) {
+func DestroyInstances(config *Config, allInstances []*Instance) {
 	for _, instance := range allInstances {
 		switch instance.Cloud.Type {
 		case "DO":
@@ -219,13 +229,19 @@ func StopInstances(config *Config, allInstances []*Instance) {
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
 			}
 		case "Google":
-			//TODO: Implement stopping of google
-			fmt.Println("Implement Google")
+			names := []string{instance.Cloud.Name}
+			if err := google.DestroyInstance(config.Google.Project, names, instance.Cloud.Region); err != nil {
+				fmt.Println(instance.String() + " not destroyed properly")
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
+				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+			} else {
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
+			}
 		case "Azure":
 			//TODOL Implement Stopping of Azure
 			fmt.Println("Implement Azure")
 		default:
-			fmt.Println("Implement default")
+			fmt.Println("Unknown Provider...skipping..")
 		}
 		if instance.Proxy.SOCKSActive {
 			if stopSingleSOCKS(instance) == false {
@@ -274,6 +290,7 @@ func Initialize(allInstances []*Instance, config *Config) {
 		instance.CobaltStrike.TeamserverEnabled = false
 		instance.Nmap.NmapActive = false
 		misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " initialized")
+		instance.Cloud.State = "RUNNING"
 	}
 }
 
@@ -292,13 +309,13 @@ func dropletsToInstances(droplets []godo.Droplet, config *Config) []Instance {
 		tempInstance.Cloud.Region = drop.Region.Slug
 		tempInstance.Cloud.IPv4 = IP
 
-		tempInstance.SSH.Username = "root"
+		tempInstance.SSH.Username = config.DO.Username
 		Instances = append(Instances, tempInstance)
 	}
 	return Instances
 }
 
-func ec2ToInstance(runResult []*ec2.Instance) (ec2Instances []Instance) {
+func ec2ToInstance(runResult []*ec2.Instance, username string) (ec2Instances []Instance) {
 	var ec2Instance Instance
 	for _, instance := range runResult {
 		availZone := aws.StringValue(instance.Placement.AvailabilityZone)
@@ -306,15 +323,29 @@ func ec2ToInstance(runResult []*ec2.Instance) (ec2Instances []Instance) {
 		ec2Instance.Cloud.ID = aws.StringValue(instance.InstanceId)
 		ec2Instance.Cloud.IPv4 = aws.StringValue(instance.PublicIpAddress)
 		ec2Instance.Cloud.Type = "AWS"
-		ec2Instance.SSH.Username = "ubuntu"
+		ec2Instance.SSH.Username = username
 		ec2Instance.Cloud.Region = region
 		ec2Instances = append(ec2Instances, ec2Instance)
 	}
 	return
 }
 
-func (config *Config) updateTermination(terminationMap map[string][]string) {
-	config.AWS.Termination = terminationMap
+// func (config *Config) updateTermination(terminationMap map[string][]string) {
+// 	config.AWS.Termination = terminationMap
+// }
+
+func googleToInstance(result [][]string, username string) []Instance {
+	var instance Instance
+	var instances []Instance
+	for _, googleInstance := range result {
+		instance.Cloud.Name = googleInstance[0]
+		instance.Cloud.Region = googleInstance[1]
+		instance.Cloud.Type = "Google"
+		instance.SSH.Username = username
+		instance.Cloud.IPv4 = googleInstance[4]
+		instances = append(instances, instance)
+	}
+	return instances
 }
 
 func getIPAddresses(allInstances []*Instance, config *Config) {

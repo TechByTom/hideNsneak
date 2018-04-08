@@ -39,6 +39,7 @@ func generateC2Profile(c2profile string, c2out string, keystore string, password
 	headerSlice := problemHeaders[:]
 	b, err := ioutil.ReadFile(c2profile)
 	if err != nil {
+		fmt.Println("Unable to open file for editing")
 		return false
 	}
 	fileString := string(b)

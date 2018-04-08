@@ -94,11 +94,11 @@ func main() {
 			var count int
 			var err error
 			for {
-				fmt.Print("<hideNsneak> Enter the cloud providers you would like to use [Default: AWS,DO]: ")
+				fmt.Print("<hideNsneak> Enter the cloud providers you would like to use [Default: AWS,DO, Google]: ")
 				providers, _ = reader.ReadString('\n')
 				providers = strings.TrimSpace(providers)
 				if providers == "" {
-					providerArray = []string{"AWS", "DO"}
+					providerArray = []string{"AWS", "DO", "Google"}
 				} else {
 					providerArray = strings.Split(providers, ",")
 					if providerCheck(providerArray) {
@@ -139,12 +139,13 @@ func main() {
 			allInstances = append(allInstances, instanceArray...)
 			//TODO: Update termination map
 		case "destroy":
+			//TODO Fix destroy to correct list remaining servers
 			reader := bufio.NewReader(os.Stdin)
 			tempInstances := []*cloud.Instance{}
 			var instanceArray []string
 			listUI(allInstances)
 
-			newInstanceList := []*cloud.Instance{}
+			//newInstanceList := []*cloud.Instance{}
 
 			for {
 				fmt.Println("<hideNSneak> Enter a comma seperated list of servers to destroy [Default: all]")
@@ -173,20 +174,6 @@ func main() {
 
 					tempInstances = append(tempInstances, allInstances[index])
 					//TODO: Fix this logic on deletion, newInstanceList should properly reflect removal of certain assets
-					if index < len(allInstances)-1 {
-						if index == 0 && len(newInstanceList) == 1 {
-							fmt.Println("")
-							newInstanceList = []*cloud.Instance{}
-							continue
-						}
-						if index == 0 {
-							newInstanceList = append(newInstanceList, allInstances[1:]...)
-						} else {
-							newInstanceList = append(newInstanceList[:index], newInstanceList[index+1:]...)
-						}
-					} else {
-						newInstanceList = allInstances[:index]
-					}
 				}
 			} else {
 				tempInstances = allInstances
@@ -197,8 +184,25 @@ func main() {
 				confirmation, _ := reader.ReadString('\n')
 				confirmation = strings.TrimSpace(confirmation)
 				if strings.ToLower(string(confirmation[0])) == "y" {
-					cloud.StopInstances(config, tempInstances)
-					allInstances = newInstanceList
+					cloud.DestroyInstances(config, tempInstances)
+					for _, p := range instanceArray {
+						index, _ := strconv.Atoi(p)
+						if index < len(allInstances)-1 {
+							if index == 0 && len(allInstances) == 1 {
+								fmt.Println("")
+								allInstances = []*cloud.Instance{}
+								continue
+							}
+							if index == 0 {
+								allInstances = allInstances[1:]
+							} else {
+								allInstances = append(allInstances[:index], allInstances[index+1:]...)
+							}
+						} else {
+							allInstances = allInstances[:index]
+						}
+					}
+					// allInstances = newInstanceList
 					break
 				}
 				if strings.ToLower(string(confirmation[0])) == "n" {
@@ -222,8 +226,9 @@ func main() {
 			}
 			sshext.ShellSystem(allInstances[num].Cloud.IPv4, allInstances[num].SSH.Username, allInstances[num].SSH.PrivateKey)
 		case "list":
+			//TODO Add Ability to specify provider
 			listUI(allInstances)
-		case "socks-add":
+		case "socksAdd":
 			startPort := config.StartPort
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Println("<hideNSneak> Servers:")
@@ -258,10 +263,14 @@ func main() {
 				proxychains, socksd = cloud.CreateSOCKS(tempInstances, config.StartPort)
 				config.StartPort = config.StartPort + len(tempInstances)
 			}
-		case "socks-remove":
+		case "socksRemove":
+		//TODO Add Socks-remove functionality
 		case "domainFront":
-		//TODO: Fix port Validation
+		//TODO Add domain fronting
 		case "nmap":
+			//TODO Test Nmap
+			//TODO Add non-evasive scanning
+			//TODO: Fix port Validation
 			// freshDeploy := deployUI(config)
 
 			//Deployment Procedure
@@ -428,6 +437,16 @@ func main() {
 			fmt.Println(proxychains)
 			fmt.Println("Socksd:")
 			fmt.Println(socksd)
+		case "sendDir":
+		//TODO add sendDir command
+		case "getDir":
+			//TODO add getDir command
+		case "sendFile":
+		//TODO add sendFile command
+		case "getFile":
+			//TODO add getFile command
+		case "firewall":
+		//TODO add firewall support
 		case "quit":
 			fmt.Println("<hideNsneak> Shutting Down")
 			os.Exit(1)
@@ -449,7 +468,7 @@ func listUI(instances []*cloud.Instance) {
 
 func providerCheck(providerArray []string) bool {
 	for _, p := range providerArray {
-		if strings.ToUpper(p) != "AWS" && strings.ToUpper(p) != "DO" {
+		if strings.ToUpper(p) != "AWS" && strings.ToUpper(p) != "DO" && strings.ToUpper(p) != "GOOGLE" {
 			fmt.Println("Unknown Cloud Provider, please check your input..")
 			return false
 		}
@@ -459,6 +478,5 @@ func providerCheck(providerArray []string) bool {
 
 // 2. Finish Security Groups and Firewalls for DO/AWS
 
-//TODO: Add Push File
 //TODO: Add instance import
 //TODO: Add Stop Instance functionality on AWS,DO,Google

@@ -80,6 +80,9 @@ func listFirewallByDroplet(token string, id int) []godo.Firewall {
 
 //Edit Firewall
 //TODO: Add Ability to add/remove firewall rules
+// func editDOFirewall(fwID string, token string) {
+
+// }
 
 //Change firewall belonging to instance
 func setDOFirewall(fwID string, token string, id int) {
