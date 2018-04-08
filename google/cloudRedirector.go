@@ -103,10 +103,10 @@ func init() {
 `
 
 func generateSource(projectDir string, redirector RedirectorSource) bool {
-	redirectorTemplate, err := template.ParseGlob(redirectorString)
+	redirectorTemplate, err := template.New("source-code").Parse(redirectorString)
 	if err != nil {
 		//Log here
-		log.Println("Error Parsing template file")
+		log.Printf("Error Parsing template string: %s", err)
 		return false
 	}
 	if _, err := os.Stat(projectDir + "/redirector.go"); err == nil {
@@ -119,7 +119,7 @@ func generateSource(projectDir string, redirector RedirectorSource) bool {
 	outFile, err := os.Create(projectDir + "/redirector.go")
 	if err != nil {
 		//Log here
-		log.Println("Error creating Go file")
+		log.Printf("Error creating Go file: %s", err)
 		return false
 	}
 	defer outFile.Close()
@@ -140,7 +140,6 @@ func generateSource(projectDir string, redirector RedirectorSource) bool {
 		log.Println("Error writing app.yaml")
 		return false
 	}
-
 	return true
 }
 

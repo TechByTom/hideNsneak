@@ -79,6 +79,7 @@ func main() {
 	// 	cloud.StopInstances(config, allInstances)
 
 	var allInstances []*cloud.Instance
+	var allDomainFronts []cloud.DomainFront
 	// var terminationMap map[string][]string
 	var proxychains, socksd string
 	reader := bufio.NewReader(os.Stdin)
@@ -268,8 +269,8 @@ func main() {
 		case "domainFront-create":
 			reader := bufio.NewReader(os.Stdin)
 			for {
-				provider, _ := reader.ReadString('\n')
 				fmt.Print("<hideNsneak> Enter the cloud provider you would like to use [Options: Google, AWS]: ")
+				provider, _ := reader.ReadString('\n')
 				provider = strings.TrimSpace(provider)
 				if provider == "" {
 					continue
@@ -285,17 +286,104 @@ func main() {
 							break
 						}
 						if strings.ToLower(string(confirmation[0])) == "y" {
-
+							cloudFrontCreation := cloud.CreateCloudfront(config, domain)
+							if cloudFrontCreation.Type != "" {
+								allDomainFronts = append(allDomainFronts, cloudFrontCreation)
+								cloudFrontCreation.Target = domain
+								fmt.Println("<hideNsneak> Cloudfront distribution created:")
+								fmt.Println("<hideNsneak> " + cloudFrontCreation.Host + "-->" + cloudFrontCreation.Target)
+							} else {
+								fmt.Println("<hideNsneak> Cloudfront distrubtion not created properly, please check the error log")
+							}
 						}
 						break
 					}
 					if provider == "Google" {
+						//TODO: Ensure that the newlines are being properly parsed out
+						var userAgent string
+						var subnet string
+						var header string
+
+						var redirection = "https://google.com"
+
+						var keystore string
+						var keystorePass string
+
+						var newProject = false
+
+						fmt.Print("<hideNsneak> Enter the domain name/IP address you want your cloudfront distro to point to: ")
+						domain, _ := reader.ReadString('\n')
+						domain = strings.TrimSpace(domain)
+						fmt.Print("<hideNsneak> Would you like to use HTTPS? [y/n]: ")
+						https, _ := reader.ReadString('\n')
+						https = strings.TrimSpace(https)
+						if strings.ToLower(string(https[0])) == "y" {
+							domain = "https://" + domain
+							fmt.Print("<hideNsneak> Please enter the name of your Java Keystore for Cobalt Strike [Leave blank if N/A]: ")
+							temp, _ := reader.ReadString('\n')
+							keystore = strings.TrimSuffix(temp, "\n")
+
+							fmt.Print("<hideNsneak> Please enter the password for your Java Keystore for Cobalt Strike [Leave blank if N/A]: ")
+							temp, _ = reader.ReadString('\n')
+							keystorePass = strings.TrimSuffix(temp, "\n")
+
+						} else {
+							domain = "http://" + domain
+						}
+						//List possible C2 profiles
+
+						//TODO: Add restriction based on header
+
+						//Restriction Based on User Agent
+						fmt.Print("<hideNsneak> Would you like to restrict access based on User Agent? [y/n]: ")
+						uaConfirmation, _ := reader.ReadString('\n')
+						uaConfirmation = strings.TrimSpace(uaConfirmation)
+						if strings.ToLower(string(uaConfirmation[0])) == "y" {
+							fmt.Print("<hideNsneak> Enter the user agent you would like to restrict on: ")
+							temp, _ := reader.ReadString('\n')
+							userAgent = strings.TrimSuffix(temp, "\n")
+						}
+
+						//Restriction Based on Subnet
+						fmt.Print("<hideNsneak> Would you like to restrict access based on Subnet?: ")
+						subnetConfirmation, _ := reader.ReadString('\n')
+						subnetConfirmation = strings.TrimSpace(subnetConfirmation)
+						if strings.ToLower(string(subnetConfirmation[0])) == "y" {
+							fmt.Print("<hideNsneak> Enter the subnet you would like to restrict access to: ")
+							temp, _ := reader.ReadString('\n')
+							subnet = strings.TrimSuffix(temp, "\n")
+						}
+
+						if strings.ToLower(string(subnetConfirmation[0])) == "y" || strings.ToLower(string(uaConfirmation[0])) == "y" {
+							fmt.Print("<hideNsneak> What is the default redirect you would like to use for restrictions? [default: https://google.com]: ")
+							temp, _ := reader.ReadString('\n')
+							redirection = strings.TrimSuffix(temp, "\n")
+						}
+
+						//Checking if the project is new
+						fmt.Print("<hideNsneak> Is this a new gcloud project? [y/n]: ")
+						projectConfirmation, _ := reader.ReadString('\n')
+						projectConfirmation = strings.TrimSpace(projectConfirmation)
+						if strings.ToLower(string(projectConfirmation[0])) == "y" {
+							newProject = true
+						}
+
+						//Add creation of C2 profiles
+						result := cloud.CreateGoogleDomainFront(config, domain, keystore, keystorePass, newProject, userAgent,
+							subnet, header, redirection, "")
+						if result != "" {
+							googleDomainFront := cloud.DomainFront{
+								Type:   "Google",
+								Host:   result,
+								Target: domain,
+							}
+							allDomainFronts = append(allDomainFronts, googleDomainFront)
+						}
 
 					}
-					continue
+					break
 				}
 			}
-		//TODO Add domain fronting
 		case "nmap":
 			//TODO Test Nmap
 			//TODO Add non-evasive scanning
