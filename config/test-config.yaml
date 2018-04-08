@@ -1,16 +1,31 @@
-PublicKey:  "/Users/mike.hodges/.ssh/do_rsa.pub"
+PublicKey:  ""
+Customer: "test"
+StartPort:  8081
+Proxychains: "/usr/local/etc/proxychains.conf"
+CobaltStrikeDir: "/tmp/cobaltstrike"
+CobaltStrikeProfiles: ""
+CobaltStrikeLicense: ""
+NmapDir: "/tmp/cloudNmaps"
+LogDir: "/tmp/hideNsneak/"
 AWS:
     secret: ""
     accessID: ""
-    regions: "us-east-1,us-east-2"
-    imageIDs: "ami-d05e75b8,ami-336b4456"
+    regions: "us-east-1,us-east-2,us-west-1,us-west-2"
+    imageIDs: "ami-66506c1c,ami-965e6bf3,ami-07585467,ami-79873901"
     type: "t2.micro"
-    number: 5
+    username: "ubuntu"
 DO:
     token: ""
+    fingerprint: ""
     regions: "*"
-    type: "ubuntu-14-04-x64"
+    slug: "ubuntu-14-04-x64"
     memory: "512mb"
-    name: "test"
-    number: 6
-    
+    name: "clientName"
+    username: "root"
+Google:
+    imageProject: "ubuntu-1604-xenial"
+    machineType: "f1-micro"
+    zones: "us-central1-f"
+    project: ""
+    name: "googleTest"
+    username: ""
