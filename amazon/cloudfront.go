@@ -13,7 +13,7 @@ import (
 /////CloudFronting////
 //////////////////////
 
-func createCloudFront(client string, comment string, domainName string, secret string, accessID string) *cloudfront.Distribution {
+func CreateCloudFront(client string, comment string, domainName string, secret string, accessID string) (*cloudfront.Distribution, string, error) {
 	originID := (client + "-" + domainName)
 	svc := cloudfront.New(session.New(&aws.Config{
 		Credentials: credentials.NewStaticCredentials(accessID, secret, ""),
@@ -115,16 +115,10 @@ func createCloudFront(client string, comment string, domainName string, secret s
 
 	//Dig further into AWS cloudfront error codes and add a switch statement to catch them
 	if err != nil {
-		fmt.Printf("There was a problem creating the cloudfront distribution: %s", err)
-		return nil
+		return nil, "", err
 	}
-	fmt.Println("Distribution Created")
-	fmt.Println(*distributionOutput.Distribution)
 
-	fmt.Println("Cloudfront URL")
-	fmt.Println(*distributionOutput.Location)
-
-	return distributionOutput.Distribution
+	return distributionOutput.Distribution, *distributionOutput.ETag, nil
 }
 
 func disableCloudFront(distribution *cloudfront.Distribution, ETag string, secret string, accessID string) (string, string) {

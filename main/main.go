@@ -265,7 +265,36 @@ func main() {
 			}
 		case "socksRemove":
 		//TODO Add Socks-remove functionality
-		case "domainFront":
+		case "domainFront-create":
+			reader := bufio.NewReader(os.Stdin)
+			for {
+				provider, _ := reader.ReadString('\n')
+				fmt.Print("<hideNsneak> Enter the cloud provider you would like to use [Options: Google, AWS]: ")
+				provider = strings.TrimSpace(provider)
+				if provider == "" {
+					continue
+				} else {
+					if provider == "AWS" {
+						fmt.Print("<hideNsneak> Enter the domain name you want your cloudfront distro to point to: ")
+						domain, _ := reader.ReadString('\n')
+						domain = strings.TrimSpace(domain)
+
+						fmt.Print("<hideNsneak> Is this correct? [Y/n]: " + domain)
+						confirmation, _ := reader.ReadString('\n')
+						if strings.ToLower(string(confirmation[0])) == "n" {
+							break
+						}
+						if strings.ToLower(string(confirmation[0])) == "y" {
+
+						}
+						break
+					}
+					if provider == "Google" {
+
+					}
+					continue
+				}
+			}
 		//TODO Add domain fronting
 		case "nmap":
 			//TODO Test Nmap
