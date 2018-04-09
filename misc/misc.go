@@ -8,6 +8,18 @@ import (
 	"time"
 )
 
+//helper function to see if a file exists
+func Exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return true, err
+}
+
 //misc.WriteActivityLog writes general activity to log file
 func WriteActivityLog(text string) {
 	//TODO Finalize a path for the activity log

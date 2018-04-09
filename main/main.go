@@ -556,11 +556,9 @@ func main() {
 			fmt.Println(socksd)
 		case "sendDir":
 			reader := bufio.NewReader(os.Stdin)
-			ipV4 := allInstances[0].Cloud.IPv4
-			userName := allInstances[0].SSH.Username
-			privateKey := allInstances[0].SSH.PrivateKey
 			var originFilePath string
 			var targetFilePath string
+			var chosenServer int
 
 			for {
 				fmt.Println("<hideNSneak> Choose which server you'd like to send the file to: ")
@@ -571,7 +569,7 @@ func main() {
 					fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
 					continue
 				}
-				if chosenServer > len(allInstances) {
+				if chosenServer > len(allInstances)-1 {
 					fmt.Println("<hideNSneak> That instance does not exist - try spinning some up or try again")
 					continue
 				}
@@ -580,14 +578,24 @@ func main() {
 				break
 			}
 
+			ipV4 := allInstances[chosenServer].Cloud.IPv4
+			userName := allInstances[chosenServer].SSH.Username
+			privateKey := allInstances[chosenServer].SSH.PrivateKey
+
 			for {
 				fmt.Println("<hideNSneak> Enter filepath of local directory to send: ")
 				originFilePath, err := reader.ReadString('\n')
+				doesFileExist, err := misc.Exists(originFilePath)
 
 				if err != nil {
 					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
+					continue
 				}
-				//todo: if local directory doesnt exist, fmt.Println("<hideNSneak> That directory does not exist - Please check your input")
+				if doesFileExist == false {
+					fmt.Println("<hideNSneak> Filepath doesn't exist - Please check your input")
+					continue
+				}
+				break
 			}
 
 			for {
