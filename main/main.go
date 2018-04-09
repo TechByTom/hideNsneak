@@ -149,7 +149,7 @@ func main() {
 			//newInstanceList := []*cloud.Instance{}
 
 			for {
-				fmt.Println("<hideNSneak> Enter a comma seperated list of servers to destroy [Default: all]")
+				fmt.Println("<hideNSneak> Enter a comma separated list of servers to destroy [Default: all]")
 				instanceString, _ := reader.ReadString('\n')
 				instanceString = strings.TrimSpace(instanceString)
 
@@ -555,7 +555,52 @@ func main() {
 			fmt.Println("Socksd:")
 			fmt.Println(socksd)
 		case "sendDir":
-		//TODO add sendDir command
+			reader := bufio.NewReader(os.Stdin)
+			ipV4 := allInstances[0].Cloud.IPv4
+			userName := allInstances[0].SSH.Username
+			privateKey := allInstances[0].SSH.PrivateKey
+			var originFilePath string
+			var targetFilePath string
+
+			for {
+				fmt.Println("<hideNSneak> Choose which server you'd like to send the file to: ")
+				chosenServerString, err := reader.ReadString('\n')
+				chosenServerString = strings.TrimSpace(chosenServerString)
+				chosenServer, err := strconv.Atoi(chosenServerString)
+				if err != nil {
+					fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
+					continue
+				}
+				if chosenServer > len(allInstances) {
+					fmt.Println("<hideNSneak> That instance does not exist - try spinning some up or try again")
+					continue
+				}
+				//todo: error handling: what if the input is strings?
+				//todo: do something with the chosenServer.... set it somehow?
+				break
+			}
+
+			for {
+				fmt.Println("<hideNSneak> Enter filepath of local directory to send: ")
+				originFilePath, err := reader.ReadString('\n')
+
+				if err != nil {
+					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
+				}
+				//todo: if local directory doesnt exist, fmt.Println("<hideNSneak> That directory does not exist - Please check your input")
+			}
+
+			for {
+				fmt.Println("<hideNSneak> Enter filepath of target directory: ")
+				targetFilePath, err := reader.ReadString('\n')
+
+				if err != nil {
+					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
+				}
+			}
+
+			sshext.RsyncDirToHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
+
 		case "getDir":
 			//TODO add getDir command
 		case "sendFile":
