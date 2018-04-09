@@ -64,6 +64,7 @@ type Config struct {
 		Zones        string `yaml:"zones"`
 		Number       int    `yaml:"number"`
 		Project      string `yaml:"project"`
+		ProjectDir   string `yaml:"projectDir"`
 		Username     string
 	} `yaml:"Google"`
 }
@@ -129,6 +130,7 @@ type Firewall struct {
 type DomainFront struct {
 	Type               string
 	Host               string
+	Target             string
 	ID                 string
 	ETag               string
 	DistributionConfig *cloudfront.DistributionConfig
@@ -459,7 +461,7 @@ func CreateFirewall(instances []*Instance, config Config, ports []int, groupName
 }
 
 //CreateCloudfront is a runner function for the creation of amazon cloudfront
-func CreateCloudfront(config Config, domain string) DomainFront {
+func CreateCloudfront(config *Config, domain string) DomainFront {
 	var cloudFront DomainFront
 	tempDistribution, etag, err := amazon.CreateCloudFront(config.Customer, "", domain, config.AWS.Secret, config.AWS.AccessID)
 	if err != nil {
@@ -471,4 +473,19 @@ func CreateCloudfront(config Config, domain string) DomainFront {
 	cloudFront.Host = *tempDistribution.DomainName
 	cloudFront.DistributionConfig = tempDistribution.DistributionConfig
 	return cloudFront
+}
+
+//CreateGoogleDomainFront is a wrapper for the google package
+//TODO Implement logging
+func CreateGoogleDomainFront(config *Config, domain string, keystore string, keystorePass string,
+	newProject bool, restrictedUserAgent string, restrictedSubnet string, restrictedHeader string,
+	defaultRedirect string, c2Profile string) string {
+	fmt.Println(config.Google.ProjectDir)
+	result, url := google.CreateRedirector(config.Google.Project, restrictedUserAgent, restrictedSubnet, restrictedHeader,
+		defaultRedirect, domain, newProject, config.Google.ProjectDir, c2Profile, c2Profile+"-2",
+		keystore, keystorePass)
+	if result {
+		return url
+	}
+	return ""
 }
