@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-//helper function to see if a file exists
+//helper function to see if a file or directory exists
 func Exists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
