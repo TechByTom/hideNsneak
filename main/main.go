@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"os/user"
+
 	"github.com/rmikehodges/hideNsneak/cloud"
 	"github.com/rmikehodges/hideNsneak/misc"
 	"github.com/rmikehodges/hideNsneak/sshext"
@@ -14,69 +16,10 @@ import (
 
 //Cloud Proxy Tool
 func main() {
-	config := cloud.ParseConfig("../config/config.yaml")
+	//TODO: make sure hidneNsneak directory exists, create it if not.
+	usr, _ := user.Current()
 
-	// 	fmt.Println("destroying old droplets")
-	// 	cloud.DestroyAllDroplets(config.DO.Token)
-
-	// 	// StartInstances
-	// 	allInstances, terminationMap := cloud.StartInstances(config)
-	// 	config.AWS.Termination = terminationMap
-	// 	// fmt.Println(config)
-	// 	if len(allInstances) == 0 {
-	// 		log.Fatal("No instances created. Check your shit bro...")
-	// 	}
-
-	// 	//ports := strings.Split("427,5631,13,873,5051,23,2717,5900,544,1025,53,25,8888,135,6001,119,9999,445,49157,5357,51326,8080,6646,2001,8008,199,514,8000,646,21,110", ",")
-	// 	//ports := strings.Split("49152,993,5432,515,2049,9,8081,8081,631,443,1723,4899,5009,9100,444,6000,5666,8009,32768,995,10000,1029,5190,3306,1110,22,88,7,554", ",")
-	// 	//ports := strings.Split("3389,179,587,79,5800,1900,2000,3128,465,3986,143,1720,389,3000,7070,5060,111,990,144,139,8443,5000,37,5101,2121,106,548,1433,543,113,1755", ",")
-	// 	//Just testing ports
-	// 	//ports := strings.Split("80,443", ",")
-
-	// 	//Not sure if this is the best way to go about it
-
-	// 	// fmt.Println(allInstances[0])
-
-	// 	// // //Gathering Information From Cloud Instances
-	// 	cloud.Initialize(allInstances, config)
-
-	// 	//Setting Up Proxychains
-	// 	proxychains, socksd := cloud.CreateSOCKS(allInstances[:1], config.StartPort)
-
-	// 	fmt.Println(proxychains)
-	// 	fmt.Println(socksd)
-
-	// 	// // editProxychains(config.Proxychains, proxychains, 1)
-
-	// 	//fmt.Println("Running nmaps")
-	// 	// //Running Nmap
-	// 	// cloud.RunConnectScans(allInstances[1:], "schein_europe_connect_discovery", "-Pn -sT -T2 --open",
-	// 	// 	true, "/Users/mike.hodges/Gigs/HenrySchein/europe/scope.hosts", ports, config.NmapDir, false)
-
-	// 	//Teamserver Junk
-	// 	// allInstances[1].teamserverSetup(config, "ms.profile", "test", "2018-05-21")
-	// 	// fmt.Println("Now Back baby")
-
-	// 	//Check Cloudfront
-
-	// 	// //Create Cloudfront
-	// 	// createCloudFront(config, "testy mctest test", "www.example.com")
-
-	// 	// //Delete cloudfronts
-	// 	// for _, p := range listCloudFront(config) {
-	// 	// 	distribution,ETag := getCloudFront(*p.Id, config)
-	// 	// 	disableCloudFront(distribution, ETag, config)
-	// 	// }
-
-	// 	log.Println("Please CTRL-C to destroy instances")
-
-	// 	// Catch CTRL-C and delete droplets.
-	// c := make(chan os.Signal, 1)
-	// signal.Notify(c, os.Interrupt)
-	// <-c
-
-	// 	// // editProxychains(config.Proxychains, proxychains, 0)
-	// 	cloud.StopInstances(config, allInstances)
+	config := cloud.ParseConfig(usr.HomeDir + "/hideNsneak/config.yaml")
 
 	var allInstances []*cloud.Instance
 	var allDomainFronts []cloud.DomainFront
@@ -100,6 +43,7 @@ func main() {
 				providers = strings.TrimSpace(providers)
 				if providers == "" {
 					providerArray = []string{"AWS", "DO", "Google"}
+					break
 				} else {
 					providerArray = strings.Split(providers, ",")
 					if providerCheck(providerArray) {
@@ -136,17 +80,14 @@ func main() {
 				}
 			}
 
-			instanceArray := cloud.StartInstances(config, providerMap)
+			instanceArray := cloud.DeployInstances(config, providerMap)
 			allInstances = append(allInstances, instanceArray...)
 			//TODO: Update termination map
 		case "destroy":
-			//TODO Fix destroy to correct list remaining servers
 			reader := bufio.NewReader(os.Stdin)
 			tempInstances := []*cloud.Instance{}
 			var instanceArray []string
 			listUI(allInstances)
-
-			//newInstanceList := []*cloud.Instance{}
 
 			for {
 				fmt.Println("<hideNSneak> Enter a comma separated list of servers to destroy [Default: all]")
@@ -211,6 +152,61 @@ func main() {
 				}
 			}
 
+		case "start":
+			reader := bufio.NewReader(os.Stdin)
+			var instanceArray []string
+			listUI(allInstances)
+
+			for {
+				fmt.Println("<hideNSneak> Enter a comma separated list of servers to start [Default: all]")
+				instanceString, _ := reader.ReadString('\n')
+				instanceString = strings.TrimSpace(instanceString)
+
+				instanceArray = strings.Split(instanceString, ",")
+
+				if misc.ValidateIntArray(instanceArray) == false && instanceArray[0] != "" {
+					fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
+					continue
+				}
+				fmt.Println("<hideNSneak> The following servers will be started - Is this ok [y/n]")
+				listUI(allInstances)
+				confirmation, _ := reader.ReadString('\n')
+				confirmation = strings.TrimSpace(confirmation)
+				//TODO: Add ability to specify start
+				if strings.ToLower(string(confirmation[0])) == "y" {
+					cloud.StartInstances(config, allInstances)
+					break
+				}
+				break
+			}
+
+		case "stop":
+			reader := bufio.NewReader(os.Stdin)
+			var instanceArray []string
+			listUI(allInstances)
+
+			for {
+				fmt.Println("<hideNSneak> Enter a comma separated list of servers to stop [Default: all]")
+				instanceString, _ := reader.ReadString('\n')
+				instanceString = strings.TrimSpace(instanceString)
+
+				instanceArray = strings.Split(instanceString, ",")
+
+				if misc.ValidateIntArray(instanceArray) == false && instanceArray[0] != "" {
+					fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
+					continue
+				}
+				fmt.Println("<hideNSneak> The following servers will be stopped - Is this ok [y/n]")
+				listUI(allInstances)
+				confirmation, _ := reader.ReadString('\n')
+				confirmation = strings.TrimSpace(confirmation)
+				//TODO: Add ability to specify start
+				if strings.ToLower(string(confirmation[0])) == "y" {
+					cloud.StopInstances(config, allInstances)
+					break
+				}
+				break
+			}
 		case "shell":
 			reader := bufio.NewReader(os.Stdin)
 			listUI(allInstances)
@@ -439,7 +435,7 @@ func main() {
 				}
 			}
 
-			instanceArray := cloud.StartInstances(config, providerMap)
+			instanceArray := cloud.DeployInstances(config, providerMap)
 			allInstances = append(allInstances, instanceArray...)
 
 			// nmapUI(freshDeploy, config)
@@ -554,7 +550,7 @@ func main() {
 			fmt.Println(proxychains)
 			fmt.Println("Socksd:")
 			fmt.Println(socksd)
-		case "senddir":
+		case "send":
 			var err error
 			reader := bufio.NewReader(os.Stdin)
 			var originFilePath string
@@ -582,24 +578,6 @@ func main() {
 			privateKey := allInstances[chosenServer].SSH.PrivateKey
 
 			for {
-				fmt.Println("<hideNSneak> Enter filepath of local directory to send: ")
-				originFilePath, err = reader.ReadString('\n')
-				originFilePath = strings.TrimSpace(originFilePath)
-				doesFileExist, err := misc.Exists(originFilePath)
-
-				if err != nil {
-					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
-					continue
-				}
-
-				if doesFileExist == false {
-					fmt.Println("<hideNSneak> Filepath doesn't exist - Please check your input")
-					continue
-				}
-				break
-			}
-
-			for {
 				fmt.Println("<hideNSneak> Enter filepath of target directory: ")
 				targetFilePath, err = reader.ReadString('\n')
 				targetFilePath = strings.TrimSpace(targetFilePath)
@@ -608,12 +586,30 @@ func main() {
 					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
 					continue
 				}
+
+				fmt.Println("<hideNSneak> Enter filepath of local directory/file to send: ")
+				originFilePath, err = reader.ReadString('\n')
+				originFilePath = strings.TrimSpace(originFilePath)
+
+				fi, err := os.Stat(originFilePath)
+				switch {
+				case err != nil:
+					if os.IsNotExist(err) {
+						fmt.Println("<hideNSneak> Filepath doesn't exist - Please check your input")
+						continue
+					} else {
+						fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
+						continue
+					}
+				case fi.IsDir():
+					sshext.RsyncDirToHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
+				default:
+					sshext.ScpFileToHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
+				}
+
 				break
 			}
-
-			sshext.RsyncDirToHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
-
-		case "getdir":
+		case "get":
 			var err error
 			reader := bufio.NewReader(os.Stdin)
 			var originFilePath string
@@ -621,7 +617,7 @@ func main() {
 			var chosenServer int
 
 			for {
-				fmt.Println("<hideNSneak> Choose the remote server to receive directory from: ")
+				fmt.Println("<hideNSneak> Choose the remote server to receive directory/file from: ")
 				listUI(allInstances)
 				chosenServerString, _ := reader.ReadString('\n')
 				chosenServerString = strings.TrimSpace(chosenServerString)
@@ -641,35 +637,35 @@ func main() {
 			privateKey := allInstances[chosenServer].SSH.PrivateKey
 
 			for {
-				fmt.Println("<hideNSneak> Enter filepath of local directory to send: ")
-				originFilePath, err = reader.ReadString('\n')
-				originFilePath = strings.TrimSpace(originFilePath)
-
-				if err != nil {
-					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
-					continue
-				}
-				break
-			}
-
-			for {
-				fmt.Println("<hideNSneak> Enter filepath of target directory: ")
+				fmt.Println("<hideNSneak> Enter the local filepath of the directory to save to: ")
 				targetFilePath, err = reader.ReadString('\n')
 				targetFilePath = strings.TrimSpace(targetFilePath)
+				_, err := os.Stat((targetFilePath))
+				if err != nil {
+					if os.IsNotExist(err) {
+						fmt.Println("<hideNSneak> Directory doesn't exist - Please check your input")
+						continue
+					} else {
+						fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
+						continue
+					}
+				}
 
+				fmt.Println("<hideNSneak> Enter filepath of remote target directory/file : ")
+				originFilePath, err = reader.ReadString('\n')
+				originFilePath = strings.TrimSpace(originFilePath)
 				if err != nil {
 					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
 					continue
 				}
+
+				err = sshext.RsyncFromHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
+				if err != nil {
+					fmt.Printf("Rsync Failed %s", err)
+				}
+
 				break
 			}
-
-			sshext.RsyncDirFromHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
-
-		case "sendFile":
-		//TODO add sendFile command
-		case "getFile":
-			//TODO add getFile command
 		case "firewall":
 		//TODO add firewall support
 		case "quit":

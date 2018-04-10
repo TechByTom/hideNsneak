@@ -85,7 +85,7 @@ func InitiateConnectScan(username string, ipv4 string, privateKey string, nmapTa
 		// }
 
 	}
-	if sshext.RsyncDirFromHost(nmapDir, localDir, username, ipv4, privateKey) != nil {
+	if sshext.RsyncFromHost(nmapDir, localDir, username, ipv4, privateKey) != nil {
 		fmt.Println("done")
 		misc.WriteActivityLog(instanceType + " " + ipv4 + " " + region + " unable to rsync nmap files")
 		return

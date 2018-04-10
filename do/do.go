@@ -17,7 +17,7 @@ type Token struct {
 	AccessToken string
 }
 
-////Token Functions////
+////Authentication Function///
 
 // Token implements interface for oauth2.
 func (t *Token) Token() (*oauth2.Token, error) {
@@ -33,13 +33,105 @@ func importDOKey(pubkey string, clinet *godo.Client) string {
 	return fingerprint
 }
 
+//Creates New DoClient
+func newDOClient(token string) *godo.Client {
+	t := &Token{AccessToken: token}
+	oa := oauth2.NewClient(oauth2.NoContext, t)
+	return godo.NewClient(oa)
+}
+
 ///////////////////////
 
 ////Machine Functions////
 
-//Converts droplets to a Machine struct
-
 /////////////////////////////
+
+func DeployInstances(token string, regions string, size string, image string, fingerprint string, number int, cust string) ([]godo.Droplet, error) {
+	var droplets []godo.Droplet
+	client := newDOClient(token)
+	availableRegions, err := doRegions(client)
+	if err != nil {
+		log.Fatalf("There was an error getting a list of regions:\nError: %s\n", err.Error())
+	}
+
+	regionCountMap, err := regionMap(availableRegions, regions, number)
+	if err != nil {
+		log.Printf("%s\n", err.Error())
+		return nil, err
+	}
+	for region, count := range regionCountMap {
+		drops, _, err := client.Droplets.CreateMultiple(context.TODO(), newDropLetMultiCreateRequest(region, cust, count, size, image, fingerprint))
+		if err != nil {
+			log.Printf("There was an error creating the droplets:\nError: %s\n", err.Error())
+			return nil, err
+		}
+		droplets = append(droplets, drops...)
+	}
+	return droplets, nil
+}
+
+func DestroyInstance(token string, machineID int) error {
+	client := newDOClient(token)
+	_, err := client.Droplets.Delete(context.TODO(), machineID)
+	if err != nil {
+		log.Printf("There was an error destroying the following machine, you may need to do cleanup:\n%d", machineID)
+		return err
+	}
+	return nil
+}
+
+func StartInstance(token string, machineID int) error {
+	client := newDOClient(token)
+	_, resp, err := client.DropletActions.PowerOn(context.TODO(), machineID)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		return fmt.Errorf("Error: Response code %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func StopInstance(token string, machineID int) error {
+	client := newDOClient(token)
+	_, resp, err := client.DropletActions.PowerOff(context.TODO(), machineID)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		return fmt.Errorf("Error: Response code %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func newDropLetMultiCreateRequest(region string, client string, count int, size string, image string, fingerprint string) *godo.DropletMultiCreateRequest {
+	var names []string
+	for i := 0; i < count; i++ {
+		name, _ := randutil.AlphaString(8)
+		names = append(names, fmt.Sprintf("%s-%s", client, name))
+	}
+	return &godo.DropletMultiCreateRequest{
+		Names:  names,
+		Region: region,
+		Size:   size,
+		Image: godo.DropletCreateImage{
+			Slug: image,
+		},
+		SSHKeys: []godo.DropletCreateSSHKey{
+			godo.DropletCreateSSHKey{
+				Fingerprint: fingerprint,
+			},
+		},
+		Backups:           false,
+		IPv6:              false,
+		PrivateNetworking: false,
+	}
+}
+
+//List existing droplets
+
+////////HELPERS////////////////////
 
 func GetDOIP(token string, id int) string {
 	client := newDOClient(token)
@@ -53,32 +145,6 @@ func GetDOIP(token string, id int) string {
 		fmt.Println("Error retrieving droplet's IP address")
 	}
 	return IP
-}
-
-func DestroyDOInstance(token string, machineID int) (bool, error) {
-	client := newDOClient(token)
-	_, err := client.Droplets.Delete(context.TODO(), machineID)
-	if err != nil {
-		log.Printf("There was an error destroying the following machine, you may need to do cleanup:\n%d", machineID)
-		return false, err
-	}
-	return true, nil
-}
-
-//Helper method for now
-func destroyMultipleDroplets(token string, droplets []godo.Droplet) {
-	client := newDOClient(token)
-	for _, drop := range droplets {
-		client.Droplets.Delete(context.TODO(), drop.ID)
-	}
-	fmt.Println("Deleted all your drops")
-}
-
-//Creates New DoClient
-func newDOClient(token string) *godo.Client {
-	t := &Token{AccessToken: token}
-	oa := oauth2.NewClient(oauth2.NoContext, t)
-	return godo.NewClient(oa)
 }
 
 //Retrieves a list of available DO regions
@@ -142,56 +208,7 @@ func regionMap(slugs []string, regions string, count int) (map[string]int, error
 	return regionCountMap, nil
 }
 
-func newDropLetMultiCreateRequest(region string, client string, count int, size string, image string, fingerprint string) *godo.DropletMultiCreateRequest {
-	var names []string
-	for i := 0; i < count; i++ {
-		name, _ := randutil.AlphaString(8)
-		names = append(names, fmt.Sprintf("%s-%s", client, name))
-	}
-	return &godo.DropletMultiCreateRequest{
-		Names:  names,
-		Region: region,
-		Size:   size,
-		Image: godo.DropletCreateImage{
-			Slug: image,
-		},
-		SSHKeys: []godo.DropletCreateSSHKey{
-			godo.DropletCreateSSHKey{
-				Fingerprint: fingerprint,
-			},
-		},
-		Backups:           false,
-		IPv6:              false,
-		PrivateNetworking: false,
-	}
-}
-
-func DeployDO(token string, regions string, size string, image string, fingerprint string, number int, cust string) []godo.Droplet {
-	var droplets []godo.Droplet
-	client := newDOClient(token)
-	availableRegions, err := doRegions(client)
-	if err != nil {
-		log.Fatalf("There was an error getting a list of regions:\nError: %s\n", err.Error())
-	}
-
-	regionCountMap, err := regionMap(availableRegions, regions, number)
-	if err != nil {
-		log.Fatalf("%s\n", err.Error())
-	}
-	for region, count := range regionCountMap {
-		log.Printf("Creating %d droplets to region %s", count, region)
-		drops, _, err := client.Droplets.CreateMultiple(context.TODO(), newDropLetMultiCreateRequest(region, cust, count, size, image, fingerprint))
-		if err != nil {
-			log.Printf("There was an error creating the droplets:\nError: %s\n", err.Error())
-			return nil
-		}
-		droplets = append(droplets, drops...)
-	}
-	return droplets
-}
-
-//List existing droplets
-func listDroplets(token string) []godo.Droplet {
+func ListDroplets(token string) []godo.Droplet {
 	client := newDOClient(token)
 	droplets, _, err := client.Droplets.List(context.TODO(), &godo.ListOptions{
 		Page:    1,
@@ -204,8 +221,19 @@ func listDroplets(token string) []godo.Droplet {
 	return droplets
 }
 
-func DestroyAllDrops(token string) {
-	drops := listDroplets(token)
+///////////MISCELANEOUS/////////////
+///functions I barely use anymore///
+func destroyAllDrops(token string) {
+	drops := ListDroplets(token)
 	destroyMultipleDroplets(token, drops)
 	fmt.Println("Your drops have been deleted")
+}
+
+//Helper method for now
+func destroyMultipleDroplets(token string, droplets []godo.Droplet) {
+	client := newDOClient(token)
+	for _, drop := range droplets {
+		client.Droplets.Delete(context.TODO(), drop.ID)
+	}
+	fmt.Println("Deleted all your drops")
 }

@@ -37,6 +37,8 @@ func SetHomeDir(ipv4 string, username string, privateKey string) string {
 
 func ScpFileToHost(file string, targetDir string, username string, ipv4 string, privateKey string) bool {
 	command := exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-i", privateKey, file, username+"@"+ipv4+":"+targetDir)
+	command.Stderr = os.Stderr
+	printCommand(command)
 	if err := command.Run(); err != nil {
 		fmt.Println("SCPfile failed")
 		fmt.Println(err)
@@ -47,6 +49,8 @@ func ScpFileToHost(file string, targetDir string, username string, ipv4 string, 
 
 func ScpFileFromHost(file string, targetDir string, username string, ipv4 string, privateKey string) bool {
 	command := exec.Command("scp", "-o", "StrictHostKeyChecking=no", "-i", privateKey, username+"@"+ipv4+":"+file, targetDir)
+	command.Stderr = os.Stderr
+	printCommand(command)
 	if err := command.Run(); err != nil {
 		fmt.Println("SCPfile failed")
 		fmt.Println(err)
@@ -58,6 +62,8 @@ func ScpFileFromHost(file string, targetDir string, username string, ipv4 string
 func RsyncDirToHost(dir string, targetDir string, username string, ipv4 string, privateKey string) error {
 	bashCmd := "rsync -azu -e 'ssh  -o StrictHostKeyChecking=no -i " + privateKey + " -l " + username + "' " + dir + " " + ipv4 + ":" + targetDir
 	command := exec.Command("bash", "-c", bashCmd)
+	command.Stderr = os.Stderr
+	printCommand(command)
 	if err := command.Run(); err != nil {
 		fmt.Printf("SCPDir failed, %s ", err)
 		return err
@@ -69,13 +75,13 @@ func printCommand(cmd *exec.Cmd) {
 	fmt.Printf("==> Executing: %s\n", strings.Join(cmd.Args, " "))
 }
 
-func RsyncDirFromHost(dir string, targetDir string, username string, ipv4 string, privateKey string) error {
-	rsyncCommand := "rsync -azu -e 'ssh -o StrictHostKeyChecking=no -i " + privateKey + " -l " + username + "' " + ipv4 + ":" + dir + " " + targetDir
+func RsyncFromHost(dir string, target string, username string, ipv4 string, privateKey string) error {
+	rsyncCommand := "rsync -azu -e 'ssh -o StrictHostKeyChecking=no -i " + privateKey + "' " + username + "@" + ipv4 + ":" + dir + " " + target
 	command := exec.Command("bash", "-c", rsyncCommand)
 	command.Stderr = os.Stderr
 	printCommand(command)
 	if err := command.Start(); err != nil {
-		fmt.Println("Rsync Dir failed")
+		fmt.Println("Rsync From failed")
 		return err
 	}
 	return nil
