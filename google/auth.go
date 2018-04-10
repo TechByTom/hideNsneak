@@ -22,11 +22,11 @@ import (
 	compute "google.golang.org/api/compute/v1"
 )
 
-const jsonTemplate = `{"installed":{"client_id":"{{.AccessID}}","project_id":"{{.Project}}","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://accounts.google.com/o/oauth2/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"{{.Secret}}","redirect_uris":["urn:ietf:wg:oauth:2.0:oob","http://localhost"]}}`
+const jsonTemplate = `{"installed":{"client_id":"{{.ClientID}}","project_id":"{{.Project}}","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://accounts.google.com/o/oauth2/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"{{.Secret}}","redirect_uris":["urn:ietf:wg:oauth:2.0:oob","http://localhost"]}}`
 
 type Authentication struct {
 	cachePath string // the path to the token cache file on disk
-	AccessID  string
+	ClientID  string
 	Secret    string
 	Project   string
 	token     *oauth2.Token // the oauth token cached in the cache file

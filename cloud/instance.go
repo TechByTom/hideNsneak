@@ -158,18 +158,13 @@ func (instance Instance) String() string {
 	if instance.Nmap.NmapActive {
 		nmapActive = "Y"
 	}
-	returnString := fmt.Sprintf("Type: %s | IP: %s | Region: %s | Nmap Active: %s | SOCKS: %s", instance.Cloud.Type, instance.Cloud.IPv4,
-		instance.Cloud.Region, nmapActive, socksPort)
+	returnString := fmt.Sprintf("Type: %s | IP: %s | Region: %s | Nmap Active: %s | SOCKS: %s | State: %s", instance.Cloud.Type, instance.Cloud.IPv4,
+		instance.Cloud.Region, nmapActive, socksPort, instance.Cloud.State)
 	return returnString
 }
 
-//Detail() prints all information about the instance
-func (instance Instance) Detail() string {
-	return ""
-}
-
 //Start, Stop, Initialize
-func StartInstances(config *Config, providerMap map[string]int) []*Instance {
+func DeployInstances(config *Config, providerMap map[string]int) []*Instance {
 	var cloudInstances []Instance
 	var instanceArray []*Instance
 	var ec2Instances []*ec2.Instance
@@ -178,19 +173,20 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 		//Instance Creation
 		//TODO: Add descriptions
 		switch provider {
+		//TODO: Catch errors on creation here
 		case "AWS":
-			ec2Instances = amazon.DeployMultipleEC2(config.AWS.Secret, config.AWS.AccessID,
+			ec2Instances = amazon.DeployInstances(config.AWS.Secret, config.AWS.AccessID,
 				misc.SplitOnComma(config.AWS.Regions), misc.SplitOnComma(config.AWS.ImageIDs), count,
 				config.PublicKey, config.AWS.Type)
 			cloudInstances = append(cloudInstances, ec2ToInstance(ec2Instances, config.AWS.Username)...)
 		case "DO":
-			doInstances := do.DeployDO(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug,
+			doInstances, _ := do.DeployInstances(config.DO.Token, config.DO.Regions, config.DO.Memory, config.DO.Slug,
 				config.DO.Fingerprint, count, config.DO.Name)
 			cloudInstances = append(cloudInstances, dropletsToInstances(doInstances, config)...)
 		case "Azure":
 			//To be added
 		case "Google":
-			googleInstances := google.CreateInstances("", config.Customer, count, config.Google.Zones, config.Google.ImageURL,
+			googleInstances := google.DeployInstances("", config.Customer, count, config.Google.Zones, config.Google.ImageURL,
 				config.Google.Project, config.PublicKey, config.Google.ClientID, config.Google.Secret)
 			cloudInstances = append(cloudInstances, googleToInstance(googleInstances, config.Google.Username)...)
 		default:
@@ -199,7 +195,7 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 	}
 	if len(cloudInstances) > 0 {
 		fmt.Println("Waiting a few seconds for all instances to initialize...")
-		time.Sleep(30 * time.Second)
+		time.Sleep(60 * time.Second)
 		for i := range cloudInstances {
 			instanceArray = append(instanceArray, &cloudInstances[i])
 		}
@@ -208,6 +204,7 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 
 		//Logging Creation of instances
 		for _, instance := range instanceArray {
+			instance.Cloud.State = "RUNNING"
 			misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " created")
 		}
 	}
@@ -217,14 +214,13 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 	return instanceArray
 }
 
-//TODO: Add Stopping of Google and Azure instances
+//TODO: Add Destruction of Azure instances
 func DestroyInstances(config *Config, allInstances []*Instance) {
 	for _, instance := range allInstances {
 		switch instance.Cloud.Type {
 		case "DO":
-			fmt.Println("DO")
 			id, _ := strconv.Atoi(instance.Cloud.ID)
-			if _, err := do.DestroyDOInstance(config.DO.Token, id); err != nil {
+			if err := do.DestroyInstance(config.DO.Token, id); err != nil {
 				fmt.Println(instance.String() + " not destroyed properly")
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
 				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
@@ -232,8 +228,7 @@ func DestroyInstances(config *Config, allInstances []*Instance) {
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
 			}
 		case "AWS":
-			fmt.Println("AMAZON")
-			if err := amazon.TerminateInstance(instance.Cloud.Region, instance.Cloud.ID, config.AWS.Secret, config.AWS.AccessID); err != nil {
+			if err := amazon.DestroyInstance(instance.Cloud.Region, instance.Cloud.ID, config.AWS.Secret, config.AWS.AccessID); err != nil {
 				fmt.Println(instance.String() + " not destroyed properly")
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
 				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
@@ -241,7 +236,14 @@ func DestroyInstances(config *Config, allInstances []*Instance) {
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
 			}
 		case "Google":
-			//TODO: implement destruction of google
+			if err := google.DestroyInstance(instance.Cloud.ID, instance.Cloud.Region, config.Google.Project,
+				config.Google.ClientID, config.Google.Secret); err != nil {
+				fmt.Println(instance.String() + " not destroyed properly")
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
+				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+			} else {
+				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
+			}
 		case "Azure":
 			//TODOL Implement destruction of Azure
 			fmt.Println("Implement Azure")
@@ -254,9 +256,99 @@ func DestroyInstances(config *Config, allInstances []*Instance) {
 			}
 		}
 	}
+}
 
-	fmt.Println("About to terminate")
-	//
+func StartInstances(config *Config, allInstances []*Instance) {
+	for _, instance := range allInstances {
+		if instance.Cloud.State == "STOPPED" {
+			switch instance.Cloud.Type {
+			case "DO":
+				id, _ := strconv.Atoi(instance.Cloud.ID)
+				if err := do.StartInstance(config.DO.Token, id); err != nil {
+					fmt.Println(instance.String() + " not started properly")
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not started - see error log")
+					misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+				} else {
+					instance.Cloud.State = "RUNNING"
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " started")
+				}
+			case "AWS":
+				if err := amazon.StartInstance(instance.Cloud.Region, instance.Cloud.ID, config.AWS.Secret, config.AWS.AccessID); err != nil {
+					fmt.Println(instance.String() + " not started properly")
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not started - see error log")
+					misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+				} else {
+					instance.Cloud.State = "RUNNING"
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " started")
+				}
+			case "Google":
+				if err := google.StartInstance(instance.Cloud.ID, instance.Cloud.Region, config.Google.Project,
+					config.Google.ClientID, config.Google.Secret); err != nil {
+					fmt.Println(instance.String() + " not destroyed properly")
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
+					misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+				} else {
+					instance.Cloud.State = "RUNNING"
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
+				}
+			case "Azure":
+				//TODOL Implement destruction of Azure
+				fmt.Println("Implement Azure")
+			default:
+				fmt.Println("Unknown Provider...skipping..")
+			}
+		}
+	}
+
+}
+
+func StopInstances(config *Config, allInstances []*Instance) {
+	for _, instance := range allInstances {
+		if instance.Cloud.State == "RUNNING" {
+			switch instance.Cloud.Type {
+			case "DO":
+				id, _ := strconv.Atoi(instance.Cloud.ID)
+				if err := do.StopInstance(config.DO.Token, id); err != nil {
+					fmt.Println(instance.String() + " not stopped properly")
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not stopped - see error log")
+					misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+				} else {
+					instance.Cloud.State = "STOPPED"
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " stopped")
+				}
+			case "AWS":
+				if err := amazon.StopInstance(instance.Cloud.Region, instance.Cloud.ID, config.AWS.Secret, config.AWS.AccessID); err != nil {
+					fmt.Println(instance.String() + " not stopped properly")
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not stopped - see error log")
+					misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+				} else {
+					instance.Cloud.State = "STOPPED"
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " stopped")
+				}
+			case "Google":
+				if err := google.StopInstance(instance.Cloud.ID, instance.Cloud.Region, config.Google.Project,
+					config.Google.ClientID, config.Google.Secret); err != nil {
+					fmt.Println(instance.String() + " not stopped properly")
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not stopped - see error log")
+					misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
+				} else {
+					instance.Cloud.State = "STOPPED"
+					misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " stopped")
+				}
+			case "Azure":
+				//TODOL Implement destruction of Azure
+				fmt.Println("Implement Azure")
+			default:
+				fmt.Println("Unknown Provider...skipping..")
+			}
+			if instance.Proxy.SOCKSActive {
+				if stopSingleSOCKS(instance) == false {
+					fmt.Println("Error: SOCKS Proxy not killed for " + instance.Cloud.IPv4 + " check application logs")
+				}
+			}
+		}
+	}
+
 }
 
 //stopSocks loops through a set of instances and kills their SOCKS processes
@@ -363,10 +455,6 @@ func getIPAddresses(allInstances []*Instance, config *Config) {
 				config.Google.ClientID, config.Google.Project)
 		}
 	}
-}
-
-func DestroyAllDroplets(token string) {
-	do.DestroyAllDrops(token)
 }
 
 //RUNNERS//

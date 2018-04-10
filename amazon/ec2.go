@@ -17,39 +17,34 @@ type EC2Config struct {
 	Region  string
 }
 
-////////////////////
-////MISC Methods////
-////////////////////
-
-func GetEC2IP(region string, secret string, accessID string, instanceId string) string {
-	svc := createEC2Session(region, secret, accessID)
-
-	result, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
-		InstanceIds: aws.StringSlice([]string{instanceId}),
+//Deploy multiple EC2 instances across regions and return Instance
+func DeployInstances(secret string, accessID string, regionList []string, imageIDList []string, number int, publicKey string, instanceType string) []*ec2.Instance {
+	svc := createEC2Session(regionList[0], secret, accessID)
+	describedRegions, err := svc.DescribeRegions(&ec2.DescribeRegionsInput{
+		RegionNames: aws.StringSlice(regionList),
 	})
 	if err != nil {
-		log.Printf("Error describing instances while fetching IP address: %s", err)
+		log.Println("Unable to describe AWS regions", err)
+		os.Exit(1)
 	}
-	return aws.StringValue(result.Reservations[0].Instances[0].PublicIpAddress)
-}
+	ec2Configs := ec2RegionMap(describedRegions.Regions, number, imageIDList)
+	var ec2Instances []*ec2.Instance
+	for _, ec2 := range ec2Configs {
+		if ec2.Count > 0 {
+			tempInstances := deployRegionEC2(ec2.ImageID, int64(ec2.Count), ec2.Region, secret, accessID, publicKey, instanceType)
+			if tempInstances == nil {
+				log.Println("Error creating instances for region: " + ec2.Region)
+			} else {
+				ec2Instances = append(ec2Instances, tempInstances...)
+			}
+		}
+	}
 
-func createEC2Session(region string, secret string, accessID string) *ec2.EC2 {
-	//Set Session
-	svc := ec2.New(session.New(&aws.Config{
-		Region:      aws.String(region),
-		Credentials: credentials.NewStaticCredentials(accessID, secret, ""),
-	}))
-	return svc
-}
-
-//TODO: Update this so it checks to see if the public key
-//has a name on EC2. If not, then import it and return the name.
-func importEC2Key(pubkey string, svc *ec2.EC2) string {
-	return path.Base(pubkey)
+	return ec2Instances
 }
 
 //Terminate EC2 Instances
-func TerminateInstance(region string, instanceId string, secret string, accessID string) error {
+func DestroyInstance(region string, instanceId string, secret string, accessID string) error {
 	svc := createEC2Session(region, secret, accessID)
 	_, err := svc.TerminateInstances(&ec2.TerminateInstancesInput{
 		InstanceIds: aws.StringSlice([]string{instanceId}),
@@ -58,7 +53,28 @@ func TerminateInstance(region string, instanceId string, secret string, accessID
 		log.Println("There was an errror terminating your EC2 instances, go clean it up %s", err)
 		return err
 	}
-	log.Println("Successfully deleted " + region + "instances")
+	return nil
+}
+
+func StartInstance(region string, instanceId string, secret string, accessID string) error {
+	svc := createEC2Session(region, secret, accessID)
+	_, err := svc.StartInstances(&ec2.StartInstancesInput{
+		InstanceIds: aws.StringSlice([]string{instanceId}),
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func StopInstance(region string, instanceId string, secret string, accessID string) error {
+	svc := createEC2Session(region, secret, accessID)
+	_, err := svc.StopInstances(&ec2.StopInstancesInput{
+		InstanceIds: aws.StringSlice([]string{instanceId}),
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -115,28 +131,33 @@ func ec2RegionMap(regionList []*ec2.Region, count int, imageIDList []string) []E
 	return ec2Configs
 }
 
-//Deploy multiple EC2 instances across regions and return Instance
-func DeployMultipleEC2(secret string, accessID string, regionList []string, imageIDList []string, number int, publicKey string, instanceType string) []*ec2.Instance {
-	svc := createEC2Session(regionList[0], secret, accessID)
-	describedRegions, err := svc.DescribeRegions(&ec2.DescribeRegionsInput{
-		RegionNames: aws.StringSlice(regionList),
+////////////////////
+////MISC Methods////
+////////////////////
+
+func GetEC2IP(region string, secret string, accessID string, instanceId string) string {
+	svc := createEC2Session(region, secret, accessID)
+
+	result, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
+		InstanceIds: aws.StringSlice([]string{instanceId}),
 	})
 	if err != nil {
-		log.Println("Unable to describe AWS regions", err)
-		os.Exit(1)
+		log.Printf("Error describing instances while fetching IP address: %s", err)
 	}
-	ec2Configs := ec2RegionMap(describedRegions.Regions, number, imageIDList)
-	var ec2Instances []*ec2.Instance
-	for _, ec2 := range ec2Configs {
-		if ec2.Count > 0 {
-			tempInstances := deployRegionEC2(ec2.ImageID, int64(ec2.Count), ec2.Region, secret, accessID, publicKey, instanceType)
-			if tempInstances == nil {
-				log.Println("Error creating instances for region: " + ec2.Region)
-			} else {
-				ec2Instances = append(ec2Instances, tempInstances...)
-			}
-		}
-	}
+	return aws.StringValue(result.Reservations[0].Instances[0].PublicIpAddress)
+}
 
-	return ec2Instances
+func createEC2Session(region string, secret string, accessID string) *ec2.EC2 {
+	//Set Session
+	svc := ec2.New(session.New(&aws.Config{
+		Region:      aws.String(region),
+		Credentials: credentials.NewStaticCredentials(accessID, secret, ""),
+	}))
+	return svc
+}
+
+//TODO: Update this so it checks to see if the public key
+//has a name on EC2. If not, then import it and return the name.
+func importEC2Key(pubkey string, svc *ec2.EC2) string {
+	return path.Base(pubkey)
 }

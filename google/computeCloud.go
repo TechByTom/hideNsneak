@@ -3,7 +3,6 @@ package google
 import (
 	"fmt"
 	"math/rand"
-	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -24,11 +23,11 @@ type GoogleInstance struct {
 	Project string
 }
 
-func CreateInstances(description string, name string, count int, zones string, image string,
-	project string, publicKey string, accessID string, secret string) []*GoogleInstance {
+func DeployInstances(description string, name string, count int, zones string, image string,
+	project string, publicKey string, clientID string, secret string) []*GoogleInstance {
 
 	auth := Authentication{
-		AccessID: accessID,
+		ClientID: clientID,
 		Secret:   secret,
 		Project:  project,
 	}
@@ -82,10 +81,12 @@ func CreateInstances(description string, name string, count int, zones string, i
 			}
 			res, err := service.Instances.Insert(project, zone, instance).Do()
 			if err != nil {
+				//Log here
 				fmt.Printf("Error creating instance: %s", err)
 				continue
 			}
 			if res.HTTPStatusCode != 200 {
+				//Log here
 				continue
 			}
 
@@ -104,115 +105,66 @@ func CreateInstances(description string, name string, count int, zones string, i
 	return googleInstances
 }
 
-func GetIPAddress(zone string, id string, secret string, clientID string, project string) string {
+func DestroyInstance(name string, zone string, project string, clientID string, secret string) error {
 	auth := Authentication{
-		AccessID: clientID,
+		ClientID: clientID,
 		Secret:   secret,
 		Project:  project,
 	}
 	service := computeAuth(auth)
-	tempInstance, _ := service.Instances.Get(project, zone, id).Do()
-	return tempInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP
-}
-
-func zoneMap(zones []string, count int) map[string]int {
-	regionCountMap := make(map[string]int)
-
-	perRegionCount := count / len(zones)
-	perRegionCountRemainder := count % len(zones)
-
-	if perRegionCount == 0 {
-		regionCountMap[zones[0]] = perRegionCountRemainder
-	} else {
-		counter := perRegionCountRemainder
-		for _, zone := range zones {
-			regionCountMap[zone] = perRegionCount
-			if counter != 0 {
-				regionCountMap[zone] = regionCountMap[zone] + 1
-				counter--
-			}
-		}
-	}
-	return regionCountMap
-}
-
-func stopInstances(project string, instanceNames []string, zone string) bool {
-	//
-	instances := strings.Join(instanceNames, " ")
-	cmd := exec.Command("gcloud", "compute", "instances", "stop", instances, "--project", project, "--zone", zone)
-	err := cmd.Run()
+	resp, err := service.Instances.Delete(project, zone, name).Do()
 	if err != nil {
-		fmt.Printf("Error stopping instances: %s", err)
-		return false
-	}
-	//Log successful import of ssh key
-	return true
-}
-
-//stopInstancesMultipleZones takes a mapping of instance names to their respective zone
-//and passes them to stop instance to stop it
-func stopInstancesMultipleZones(project string, zoneInstanceMap map[string][]string) {
-	for zone, instances := range zoneInstanceMap {
-		stopInstances(project, instances, zone)
-	}
-}
-
-func startInstancesMultipleZones(description string, machineType string, zone string, imageFamily string,
-	project string, imageProject string) {
-}
-
-//DestroyInstance destroys the given instances for the specified zones
-func DestroyInstance(project string, instanceNames []string, zone string) error {
-	instances := strings.Join(instanceNames, " ")
-	gcloudDelete := "echo 'Y' | gcloud compute instances delete " + instances + " --project " + project + " --zone " + zone
-	fmt.Println(gcloudDelete)
-	cmd := exec.Command("bash", "-c", gcloudDelete)
-	err := cmd.Start()
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-	if err != nil {
-		fmt.Printf("Error stopping instances: %s", err)
 		return err
+	}
+	if resp.HTTPStatusCode != 200 {
+		return fmt.Errorf("Error: Response code %d", resp.HTTPStatusCode)
 	}
 	return nil
 }
 
-func DestroyMultipleInstances(project string, zoneInstanceMap map[string][]string) {
-	for zone, instances := range zoneInstanceMap {
-		stopInstances(project, instances, zone)
+func StartInstance(name string, zone string, project string, clientID string, secret string) error {
+	auth := Authentication{
+		ClientID: clientID,
+		Secret:   secret,
+		Project:  project,
 	}
+	service := computeAuth(auth)
+	resp, err := service.Instances.Start(project, zone, name).Do()
+	if err != nil {
+		return err
+	}
+	if resp.HTTPStatusCode != 200 {
+		return fmt.Errorf("Error: Response code %d", resp.HTTPStatusCode)
+	}
+	return nil
 }
 
-//Helper function for firewall functions to verify correct CIDR format
-func verifySourceRanges(sourceRanges string) bool {
-	sourceList := strings.Split(sourceRanges, ",")
-	r, _ := regexp.Compile(`([0-255]{1,3}\.){3}[0-255]{1,3}\/[0-32]{1,2}`)
-	for _, cidr := range sourceList {
-		if !r.Match([]byte(cidr)) {
-			return false
-		}
+func StopInstance(name string, zone string, project string, clientID string, secret string) error {
+	auth := Authentication{
+		ClientID: clientID,
+		Secret:   secret,
+		Project:  project,
 	}
-	return true
+	service := computeAuth(auth)
+	resp, err := service.Instances.Stop(project, zone, name).Do()
+	if err != nil {
+		return err
+	}
+	if resp.HTTPStatusCode != 200 {
+		return fmt.Errorf("Error: Response code %d", resp.HTTPStatusCode)
+	}
+	return nil
 }
 
 //As of right now firewall rules apply globally
 //to all compute cloud instances as they are all on the
 //same network. This probably will be changed in the future
 func createInboundRule(project string, ruleName string, protocol string, port string, sourceRanges string) bool {
-	parsedSourceRanges := sourceRanges
-	if !verifySourceRanges(sourceRanges) {
-		parsedSourceRanges = "0.0.0.0/0"
-	}
-	rule := protocol + ":" + port
-	cmd := exec.Command("gcloud", "compute", "firewall-rules", "create", ruleName, "--source-ranges", parsedSourceRanges,
-		"--allow", rule)
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("Error create firewall rule: %s", err)
-		return false
-	}
-	//Log successful import of ssh key
+	// parsedSourceRanges := sourceRanges
+	// if !verifySourceRanges(sourceRanges) {
+	// 	parsedSourceRanges = "0.0.0.0/0"
+	// }
+	// rule := protocol + ":" + port
 	return true
 }
 
@@ -243,9 +195,46 @@ func createOutboundRule() {}
 
 func deleteOutboundRule() {}
 
-//This needs to be done later
-func checkForFirstRun() {
-	//Find ~/.ssh/google_compute_engine
+func GetIPAddress(zone string, id string, secret string, clientID string, project string) string {
+	auth := Authentication{
+		ClientID: clientID,
+		Secret:   secret,
+		Project:  project,
+	}
+	service := computeAuth(auth)
+	tempInstance, _ := service.Instances.Get(project, zone, id).Do()
+	return tempInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP
+}
 
-	//If exists then allow user to prompt through
+func zoneMap(zones []string, count int) map[string]int {
+	regionCountMap := make(map[string]int)
+
+	perRegionCount := count / len(zones)
+	perRegionCountRemainder := count % len(zones)
+
+	if perRegionCount == 0 {
+		regionCountMap[zones[0]] = perRegionCountRemainder
+	} else {
+		counter := perRegionCountRemainder
+		for _, zone := range zones {
+			regionCountMap[zone] = perRegionCount
+			if counter != 0 {
+				regionCountMap[zone] = regionCountMap[zone] + 1
+				counter--
+			}
+		}
+	}
+	return regionCountMap
+}
+
+//Helper function for firewall functions to verify correct CIDR format
+func verifySourceRanges(sourceRanges string) bool {
+	sourceList := strings.Split(sourceRanges, ",")
+	r, _ := regexp.Compile(`([0-255]{1,3}\.){3}[0-255]{1,3}\/[0-32]{1,2}`)
+	for _, cidr := range sourceList {
+		if !r.Match([]byte(cidr)) {
+			return false
+		}
+	}
+	return true
 }
