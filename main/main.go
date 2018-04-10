@@ -192,7 +192,7 @@ func main() {
 							if index == 0 && len(allInstances) == 1 {
 								fmt.Println("")
 								allInstances = []*cloud.Instance{}
-								continue
+								break
 							}
 							if index == 0 {
 								allInstances = allInstances[1:]
@@ -613,7 +613,7 @@ func main() {
 
 			sshext.RsyncDirToHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
 
-		case "getDir":
+		case "getdir":
 			var err error
 			reader := bufio.NewReader(os.Stdin)
 			var originFilePath string
@@ -644,18 +644,11 @@ func main() {
 				fmt.Println("<hideNSneak> Enter filepath of local directory to send: ")
 				originFilePath, err = reader.ReadString('\n')
 				originFilePath = strings.TrimSpace(originFilePath)
-				// doesFileExist, err := misc.Exists(originFilePath)
 
 				if err != nil {
 					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
 					continue
 				}
-
-				//todo: need to flip this to ssh and check if directory exists in remote server
-				// if doesFileExist == false {
-				// 	fmt.Println("<hideNSneak> Filepath doesn't exist - Please check your input")
-				// 	continue
-				// }
 				break
 			}
 
