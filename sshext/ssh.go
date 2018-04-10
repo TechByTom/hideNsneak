@@ -56,10 +56,10 @@ func ScpFileFromHost(file string, targetDir string, username string, ipv4 string
 }
 
 func RsyncDirToHost(dir string, targetDir string, username string, ipv4 string, privateKey string) error {
-	command := exec.Command("rsync", "-azu", "-e", "'ssh", "-o", "StrictHostKeyChecking=no", "-i", privateKey, "-l", username+"'", dir, ipv4+":"+targetDir)
-	if err := command.Start(); err != nil {
-		fmt.Println("SCPDir failed")
-		fmt.Println(err)
+	bashCmd := "rsync -azu -e 'ssh  -o StrictHostKeyChecking=no -i " + privateKey + " -l " + username + "' " + dir + " " + ipv4 + ":" + targetDir
+	command := exec.Command("bash", "-c", bashCmd)
+	if err := command.Run(); err != nil {
+		fmt.Printf("SCPDir failed, %s ", err)
 		return err
 	}
 	return nil
