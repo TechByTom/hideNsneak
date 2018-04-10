@@ -192,7 +192,7 @@ func main() {
 							if index == 0 && len(allInstances) == 1 {
 								fmt.Println("")
 								allInstances = []*cloud.Instance{}
-								continue
+								break
 							}
 							if index == 0 {
 								allInstances = allInstances[1:]
@@ -554,17 +554,19 @@ func main() {
 			fmt.Println(proxychains)
 			fmt.Println("Socksd:")
 			fmt.Println(socksd)
-		case "sendDir":
+		case "senddir":
+			var err error
 			reader := bufio.NewReader(os.Stdin)
 			var originFilePath string
 			var targetFilePath string
 			var chosenServer int
 
 			for {
-				fmt.Println("<hideNSneak> Choose which server you'd like to send the file to: ")
-				chosenServerString, err := reader.ReadString('\n')
+				fmt.Println("<hideNSneak> Choose the remote server to send directory to: ")
+				listUI(allInstances)
+				chosenServerString, _ := reader.ReadString('\n')
 				chosenServerString = strings.TrimSpace(chosenServerString)
-				chosenServer, err := strconv.Atoi(chosenServerString)
+				chosenServer, err = strconv.Atoi(chosenServerString)
 				if err != nil {
 					fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
 					continue
@@ -573,24 +575,23 @@ func main() {
 					fmt.Println("<hideNSneak> That instance does not exist - try spinning some up or try again")
 					continue
 				}
-				//todo: error handling: what if the input is strings?
-				//todo: do something with the chosenServer.... set it somehow?
 				break
 			}
-
 			ipV4 := allInstances[chosenServer].Cloud.IPv4
 			userName := allInstances[chosenServer].SSH.Username
 			privateKey := allInstances[chosenServer].SSH.PrivateKey
 
 			for {
 				fmt.Println("<hideNSneak> Enter filepath of local directory to send: ")
-				originFilePath, err := reader.ReadString('\n')
+				originFilePath, err = reader.ReadString('\n')
+				originFilePath = strings.TrimSpace(originFilePath)
 				doesFileExist, err := misc.Exists(originFilePath)
 
 				if err != nil {
 					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
 					continue
 				}
+
 				if doesFileExist == false {
 					fmt.Println("<hideNSneak> Filepath doesn't exist - Please check your input")
 					continue
@@ -600,17 +601,71 @@ func main() {
 
 			for {
 				fmt.Println("<hideNSneak> Enter filepath of target directory: ")
-				targetFilePath, err := reader.ReadString('\n')
+				targetFilePath, err = reader.ReadString('\n')
+				targetFilePath = strings.TrimSpace(targetFilePath)
 
 				if err != nil {
 					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
+					continue
 				}
+				break
 			}
 
 			sshext.RsyncDirToHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
 
-		case "getDir":
-			//TODO add getDir command
+		case "getdir":
+			var err error
+			reader := bufio.NewReader(os.Stdin)
+			var originFilePath string
+			var targetFilePath string
+			var chosenServer int
+
+			for {
+				fmt.Println("<hideNSneak> Choose the remote server to receive directory from: ")
+				listUI(allInstances)
+				chosenServerString, _ := reader.ReadString('\n')
+				chosenServerString = strings.TrimSpace(chosenServerString)
+				chosenServer, err = strconv.Atoi(chosenServerString)
+				if err != nil {
+					fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
+					continue
+				}
+				if chosenServer > len(allInstances)-1 {
+					fmt.Println("<hideNSneak> That instance does not exist - try spinning some up or try again")
+					continue
+				}
+				break
+			}
+			ipV4 := allInstances[chosenServer].Cloud.IPv4
+			userName := allInstances[chosenServer].SSH.Username
+			privateKey := allInstances[chosenServer].SSH.PrivateKey
+
+			for {
+				fmt.Println("<hideNSneak> Enter filepath of local directory to send: ")
+				originFilePath, err = reader.ReadString('\n')
+				originFilePath = strings.TrimSpace(originFilePath)
+
+				if err != nil {
+					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
+					continue
+				}
+				break
+			}
+
+			for {
+				fmt.Println("<hideNSneak> Enter filepath of target directory: ")
+				targetFilePath, err = reader.ReadString('\n')
+				targetFilePath = strings.TrimSpace(targetFilePath)
+
+				if err != nil {
+					fmt.Println("<hideNSneak> Invalid filepath - Please check your input")
+					continue
+				}
+				break
+			}
+
+			sshext.RsyncDirFromHost(originFilePath, targetFilePath, userName, ipV4, privateKey)
+
 		case "sendFile":
 		//TODO add sendFile command
 		case "getFile":
