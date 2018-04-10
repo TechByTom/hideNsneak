@@ -58,14 +58,14 @@ type Config struct {
 		Username    string
 	} `yaml:"DO"`
 	Google struct {
-		ImageFamily  string `yaml:"imageFamily"`
-		ImageProject string `yaml:"imageProject"`
-		MachineType  string `yaml:"machineType"`
-		Zones        string `yaml:"zones"`
-		Number       int    `yaml:"number"`
-		Project      string `yaml:"project"`
-		ProjectDir   string `yaml:"projectDir"`
-		Username     string
+		ImageURL   string `yaml:"imageURL"`
+		Zones      string `yaml:"zones"`
+		Number     int    `yaml:"number"`
+		Project    string `yaml:"project"`
+		ProjectDir string `yaml:"projectDir"`
+		ClientID   string `yaml:"clientID"`
+		Secret     string `yaml:"secret"`
+		Username   string
 	} `yaml:"Google"`
 }
 
@@ -80,7 +80,6 @@ type Instance struct {
 		Firewalls   []string
 		Domain      string
 		HomeDir     string
-		Name        string
 		State       string
 	}
 	SSH struct {
@@ -191,8 +190,8 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 		case "Azure":
 			//To be added
 		case "Google":
-			googleInstances := google.CreateInstances("", config.Customer, count, config.Google.MachineType, config.Google.Zones,
-				config.Google.ImageFamily, config.Google.Project, config.Google.ImageProject, config.PublicKey)
+			googleInstances := google.CreateInstances("", config.Customer, count, config.Google.Zones, config.Google.ImageURL,
+				config.Google.Project, config.PublicKey, config.Google.ClientID, config.Google.Secret)
 			cloudInstances = append(cloudInstances, googleToInstance(googleInstances, config.Google.Username)...)
 		default:
 			continue
@@ -201,7 +200,6 @@ func StartInstances(config *Config, providerMap map[string]int) []*Instance {
 	if len(cloudInstances) > 0 {
 		fmt.Println("Waiting a few seconds for all instances to initialize...")
 		time.Sleep(30 * time.Second)
-
 		for i := range cloudInstances {
 			instanceArray = append(instanceArray, &cloudInstances[i])
 		}
@@ -243,16 +241,9 @@ func DestroyInstances(config *Config, allInstances []*Instance) {
 				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
 			}
 		case "Google":
-			names := []string{instance.Cloud.Name}
-			if err := google.DestroyInstance(config.Google.Project, names, instance.Cloud.Region); err != nil {
-				fmt.Println(instance.String() + " not destroyed properly")
-				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " not destroyed - see error log")
-				misc.WriteErrorLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + ":" + fmt.Sprint(err))
-			} else {
-				misc.WriteActivityLog(instance.Cloud.Type + " " + instance.Cloud.IPv4 + " " + instance.Cloud.Region + " destroyed")
-			}
+			//TODO: implement destruction of google
 		case "Azure":
-			//TODOL Implement Stopping of Azure
+			//TODOL Implement destruction of Azure
 			fmt.Println("Implement Azure")
 		default:
 			fmt.Println("Unknown Provider...skipping..")
@@ -299,6 +290,7 @@ func stopSingleSOCKS(instance *Instance) bool {
 func Initialize(allInstances []*Instance, config *Config) {
 	for _, instance := range allInstances {
 		instance.SSH.PrivateKey = strings.Split(config.PublicKey, ".pub")[0]
+
 		// instance.Cloud.HomeDir = sshext.SetHomeDir(instance.Cloud.IPv4, instance.SSH.Username, instance.SSH.PrivateKey)
 		instance.Proxy.SOCKSActive = false
 		instance.CobaltStrike.TeamserverEnabled = false
@@ -333,30 +325,25 @@ func ec2ToInstance(runResult []*ec2.Instance, username string) (ec2Instances []I
 	var ec2Instance Instance
 	for _, instance := range runResult {
 		availZone := aws.StringValue(instance.Placement.AvailabilityZone)
-		region := availZone[:len(availZone)-1]
 		ec2Instance.Cloud.ID = aws.StringValue(instance.InstanceId)
 		ec2Instance.Cloud.IPv4 = aws.StringValue(instance.PublicIpAddress)
 		ec2Instance.Cloud.Type = "AWS"
 		ec2Instance.SSH.Username = username
-		ec2Instance.Cloud.Region = region
+		ec2Instance.Cloud.Region = availZone[:len(availZone)-1]
 		ec2Instances = append(ec2Instances, ec2Instance)
 	}
 	return
 }
 
-// func (config *Config) updateTermination(terminationMap map[string][]string) {
-// 	config.AWS.Termination = terminationMap
-// }
-
-func googleToInstance(result [][]string, username string) []Instance {
+func googleToInstance(googleInstances []*google.GoogleInstance, username string) (instances []Instance) {
 	var instance Instance
-	var instances []Instance
-	for _, googleInstance := range result {
-		instance.Cloud.Name = googleInstance[0]
-		instance.Cloud.Region = googleInstance[1]
+	for _, googleInstance := range googleInstances {
+		instance.Cloud.ID = googleInstance.ID
+		instance.Cloud.IPv4 = googleInstance.IPv4
 		instance.Cloud.Type = "Google"
 		instance.SSH.Username = username
-		instance.Cloud.IPv4 = googleInstance[4]
+		instance.Cloud.Region = googleInstance.Zone
+		instance.Cloud.State = googleInstance.State
 		instances = append(instances, instance)
 	}
 	return instances
@@ -371,8 +358,11 @@ func getIPAddresses(allInstances []*Instance, config *Config) {
 			doID, _ := strconv.Atoi(instance.Cloud.ID)
 			instance.Cloud.IPv4 = do.GetDOIP(config.DO.Token, doID)
 		}
+		if instance.Cloud.Type == "Google" {
+			instance.Cloud.IPv4 = google.GetIPAddress(instance.Cloud.Region, instance.Cloud.ID, config.Google.Secret,
+				config.Google.ClientID, config.Google.Project)
+		}
 	}
-	// return allInstances
 }
 
 func DestroyAllDroplets(token string) {

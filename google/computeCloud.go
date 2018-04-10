@@ -9,61 +9,110 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	compute "google.golang.org/api/compute/v1"
 )
 
 // --machine-type=MACHINE_TYPE
 // Specifies the machine type used for the instances. To get a list of available machine types, run 'gcloud compute machine-types list'. If unspecified, the default type is n1-standard-1.
 
-func CreateInstances(description string, name string, count int, machineType string, zones string, imageFamily string,
-	project string, imageProject string, publicKey string) [][]string {
+type GoogleInstance struct {
+	ID      string
+	Zone    string
+	IPv4    string
+	State   string
+	Project string
+}
 
-	//Ensuring the ssh key is set for the project
-	setSSHKeyFile(strings.Split(publicKey, ".pub")[0], project)
+func CreateInstances(description string, name string, count int, zones string, image string,
+	project string, publicKey string, accessID string, secret string) []*GoogleInstance {
+
+	auth := Authentication{
+		AccessID: accessID,
+		Secret:   secret,
+		Project:  project,
+	}
+	prefix := "https://www.googleapis.com/compute/v1/projects/" + project
+	imageURL := image
+
+	service := computeAuth(auth)
+
+	var googleInstances []*GoogleInstance
+
+	//TODO: Add this to config file
+
+	//TODO: Make sure SSH key file is added to the project
 
 	zoneMap := zoneMap(strings.Split(zones, ","), count)
-	nameList := ""
-	var instances [][]string
+
+	// var instances [][]string
 	s1 := rand.NewSource(time.Now().UnixNano())
 	r1 := rand.New(s1)
 
 	//For each zone create the correct amount of instances
 	for zone, counter := range zoneMap {
-
 		//Creating the naming for the CLI
 		for i := 0; i < counter; i++ {
-			nameList = nameList + name + strconv.Itoa(r1.Intn(1000000)) + " "
-		}
-		nameList := nameList[:len(nameList)-1]
-
-		//Command
-		gcloudCreate := `gcloud compute instances create ` + nameList + ` --machine-type=` + machineType + ` --description=` + description + ` --zone=` + zone + ` --image-project=` + imageProject + ` --project=` + project + ` | grep -v https://www.googleapis.com | grep -v INTERNAL_IP`
-		cmd := exec.Command("bash", "-c", gcloudCreate)
-		output, err := cmd.Output()
-		if err != nil {
-			fmt.Printf("Error creating an instance for zone "+zone+": %s", err)
-		}
-
-		//Splitting the output based on newlines
-		splitResult := strings.Split(string(output), "\n")
-		splitResult = splitResult[:len(splitResult)-1]
-		var temp []string
-
-		//Looping through split output and splitting it based on " "
-		for _, p := range splitResult {
-			parsed := strings.Split(p, " ")
-
-			for _, q := range parsed {
-				if strings.TrimSpace(q) != "" {
-					temp = append(temp, q)
-				}
+			instance := &compute.Instance{
+				Name:        name + strconv.Itoa(r1.Intn(1000000)),
+				Description: "",
+				MachineType: prefix + "/zones/" + zone + "/machineTypes/n1-standard-1",
+				Disks: []*compute.AttachedDisk{
+					{
+						AutoDelete: true,
+						Boot:       true,
+						Type:       "PERSISTENT",
+						InitializeParams: &compute.AttachedDiskInitializeParams{
+							DiskName:    name + strconv.Itoa(r1.Intn(1000000)),
+							SourceImage: imageURL,
+						},
+					},
+				},
+				NetworkInterfaces: []*compute.NetworkInterface{
+					&compute.NetworkInterface{
+						AccessConfigs: []*compute.AccessConfig{
+							&compute.AccessConfig{
+								Type: "ONE_TO_ONE_NAT",
+								Name: "External NAT",
+							},
+						},
+						Network: prefix + "/global/networks/default",
+					},
+				},
 			}
-			instances = append(instances, temp)
-			temp = []string{}
+			res, err := service.Instances.Insert(project, zone, instance).Do()
+			if err != nil {
+				fmt.Printf("Error creating instance: %s", err)
+				continue
+			}
+			if res.HTTPStatusCode != 200 {
+				continue
+			}
+
+			tempInstance, _ := service.Instances.Get(project, zone, instance.Name).Do()
+			fmt.Println(tempInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP)
+			googleInstance := &GoogleInstance{
+				ID:      instance.Name,
+				Zone:    zone,
+				IPv4:    tempInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP,
+				State:   tempInstance.Status,
+				Project: project,
+			}
+			googleInstances = append(googleInstances, googleInstance)
 		}
-
 	}
+	return googleInstances
+}
 
-	return instances
+func GetIPAddress(zone string, id string, secret string, clientID string, project string) string {
+	auth := Authentication{
+		AccessID: clientID,
+		Secret:   secret,
+		Project:  project,
+	}
+	service := computeAuth(auth)
+	tempInstance, _ := service.Instances.Get(project, zone, id).Do()
+	return tempInstance.NetworkInterfaces[0].AccessConfigs[0].NatIP
 }
 
 func zoneMap(zones []string, count int) map[string]int {
@@ -193,17 +242,6 @@ func describeRules(project string) bool {
 func createOutboundRule() {}
 
 func deleteOutboundRule() {}
-
-func setSSHKeyFile(sshKeyFile string, project string) bool {
-	cmd := exec.Command("gcloud", "compute", "config-ssh", "--ssh-key-file", sshKeyFile, "--project", project)
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("Error importing sshKeyFile: %s", err)
-		return false
-	}
-	//Log successful import of ssh key
-	return true
-}
 
 //This needs to be done later
 func checkForFirstRun() {
