@@ -26,7 +26,10 @@ api_version: go1
 
 handlers:
 - url: /.*
-  script: _go_app`
+  script: _go_app
+  
+manual_scaling:
+  instances: 1`
 
 const redirectorString = `package goengine
 import (
@@ -198,8 +201,7 @@ func execGCloud(newProject bool, projectName string, projectDir string) bool {
 func CreateRedirector(projectName string, RestrictedUA string, RestrictedSubnet string, RestrictedHeader string,
 	DefaultRedirect string, C2Url string, newProject bool, projectDir string, c2Profile string, c2Out string,
 	keystore string, keyStorepass string) (bool, string) {
-	ssl := false
-	parsedURL, err := url.Parse(C2Url)
+	_, err := url.Parse(C2Url)
 	if err != nil {
 		fmt.Println("Invalid URL was passed")
 		return false, ""
@@ -211,13 +213,6 @@ func CreateRedirector(projectName string, RestrictedUA string, RestrictedSubnet 
 	if !execGCloud(newProject, projectName, projectDir) {
 		fmt.Println("There was a problem during the gcloud upload")
 		return false, ""
-	}
-
-	if parsedURL.Scheme == "https" {
-		ssl = true
-	}
-	if !generateC2Profile(c2Profile, c2Out, keystore, keyStorepass, ssl, parsedURL.Hostname()) {
-		fmt.Println("There was an issue rewriting the C2 profile. You will have to do so manually")
 	}
 	return true, "https://" + projectName + ".appspot.com"
 }
