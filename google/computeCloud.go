@@ -238,3 +238,27 @@ func verifySourceRanges(sourceRanges string) bool {
 	}
 	return true
 }
+
+func verifyProjectSSHKey(zone string, project string, clientID string, secret string, publicKey string) error {
+	auth := Authentication{
+		ClientID: clientID,
+		Secret:   secret,
+		Project:  project,
+	}
+	service := computeAuth(auth)
+
+	res, err := service.Projects.Get(project).Do()
+	if err != nil {
+		return err
+	}
+	metadata := res.CommonInstanceMetadata
+	for _, item := range metadata.Items {
+		if item.Key == "ssh-keys" {
+			if strings.Contains(*item.Value, publicKey) {
+				return nil
+			}
+			*item.Value = *item.Value + "\n" + publicKey
+		}
+	}
+	return nil
+}

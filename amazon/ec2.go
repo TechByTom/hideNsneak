@@ -3,7 +3,6 @@ package amazon
 import (
 	"log"
 	"os"
-	"path"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -18,7 +17,7 @@ type EC2Config struct {
 }
 
 //Deploy multiple EC2 instances across regions and return Instance
-func DeployInstances(secret string, accessID string, regionList []string, imageIDList []string, number int, publicKey string, instanceType string) []*ec2.Instance {
+func DeployInstances(secret string, accessID string, regionList []string, imageIDList []string, number int, publicKey string, keyName string, instanceType string) []*ec2.Instance {
 	svc := createEC2Session(regionList[0], secret, accessID)
 	describedRegions, err := svc.DescribeRegions(&ec2.DescribeRegionsInput{
 		RegionNames: aws.StringSlice(regionList),
@@ -31,7 +30,7 @@ func DeployInstances(secret string, accessID string, regionList []string, imageI
 	var ec2Instances []*ec2.Instance
 	for _, ec2 := range ec2Configs {
 		if ec2.Count > 0 {
-			tempInstances := deployRegionEC2(ec2.ImageID, int64(ec2.Count), ec2.Region, secret, accessID, publicKey, instanceType)
+			tempInstances := deployRegionEC2(ec2.ImageID, int64(ec2.Count), ec2.Region, secret, accessID, publicKey, keyName, instanceType)
 			if tempInstances == nil {
 				log.Println("Error creating instances for region: " + ec2.Region)
 			} else {
@@ -79,11 +78,9 @@ func StopInstance(region string, instanceId string, secret string, accessID stri
 }
 
 //Deploy EC2 images by region
-func deployRegionEC2(imageID string, count int64, region string, secret string, accessID string, publicKey string, instanceType string) []*ec2.Instance {
+func deployRegionEC2(imageID string, count int64, region string, secret string, accessID string, publicKey string, keyName string, instanceType string) []*ec2.Instance {
 	securityGroup := [...]string{"default"}
 	svc := createEC2Session(region, secret, accessID)
-
-	keyName := importEC2Key(publicKey, svc)
 
 	//Create Instance
 	runResult, err := svc.RunInstances(&ec2.RunInstancesInput{
@@ -141,6 +138,7 @@ func GetEC2IP(region string, secret string, accessID string, instanceId string) 
 	result, err := svc.DescribeInstances(&ec2.DescribeInstancesInput{
 		InstanceIds: aws.StringSlice([]string{instanceId}),
 	})
+
 	if err != nil {
 		log.Printf("Error describing instances while fetching IP address: %s", err)
 	}
@@ -158,6 +156,5 @@ func createEC2Session(region string, secret string, accessID string) *ec2.EC2 {
 
 //TODO: Update this so it checks to see if the public key
 //has a name on EC2. If not, then import it and return the name.
-func importEC2Key(pubkey string, svc *ec2.EC2) string {
-	return path.Base(pubkey)
+func importEC2Key(pubkey string, svc *ec2.EC2) {
 }

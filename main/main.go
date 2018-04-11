@@ -19,7 +19,7 @@ func main() {
 	//TODO: make sure hidneNsneak directory exists, create it if not.
 	usr, _ := user.Current()
 
-	config := cloud.ParseConfig(usr.HomeDir + "/hideNsneak/config.yaml")
+	config := cloud.ParseConfig(usr.HomeDir + "/.hideNsneak/config.yaml")
 
 	var allInstances []*cloud.Instance
 	var allDomainFronts []cloud.DomainFront
@@ -96,7 +96,9 @@ func main() {
 
 				instanceArray = strings.Split(instanceString, ",")
 
-				if misc.ValidateIntArray(instanceArray) == false && instanceArray[0] != "" {
+				_, result := misc.ValidateIntArray(instanceArray)
+
+				if result == false && instanceArray[0] != "" {
 					fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
 					continue
 				}
@@ -153,6 +155,7 @@ func main() {
 			}
 
 		case "start":
+			//TODO Speicify which instances to start
 			reader := bufio.NewReader(os.Stdin)
 			var instanceArray []string
 			listUI(allInstances)
@@ -164,7 +167,8 @@ func main() {
 
 				instanceArray = strings.Split(instanceString, ",")
 
-				if misc.ValidateIntArray(instanceArray) == false && instanceArray[0] != "" {
+				intArray, result := misc.ValidateIntArray(instanceArray)
+				if result == false && instanceArray[0] != "" {
 					fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
 					continue
 				}
@@ -174,8 +178,9 @@ func main() {
 				confirmation = strings.TrimSpace(confirmation)
 				//TODO: Add ability to specify start
 				if strings.ToLower(string(confirmation[0])) == "y" {
-					cloud.StartInstances(config, allInstances)
-					break
+					for _, i := range intArray {
+						cloud.StartInstance(config, allInstances[i])
+					}
 				}
 				break
 			}
@@ -192,7 +197,8 @@ func main() {
 
 				instanceArray = strings.Split(instanceString, ",")
 
-				if misc.ValidateIntArray(instanceArray) == false && instanceArray[0] != "" {
+				intArray, result := misc.ValidateIntArray(instanceArray)
+				if result == false && instanceArray[0] != "" {
 					fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
 					continue
 				}
@@ -202,8 +208,9 @@ func main() {
 				confirmation = strings.TrimSpace(confirmation)
 				//TODO: Add ability to specify start
 				if strings.ToLower(string(confirmation[0])) == "y" {
-					cloud.StopInstances(config, allInstances)
-					break
+					for _, i := range intArray {
+						cloud.StopInstance(config, allInstances[i])
+					}
 				}
 				break
 			}
@@ -225,7 +232,7 @@ func main() {
 		case "list":
 			//TODO Add Ability to specify provider
 			listUI(allInstances)
-		case "socksAdd":
+		case "socks-add":
 			startPort := config.StartPort
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Println("<hideNSneak> Servers:")
@@ -237,30 +244,76 @@ func main() {
 				if stringPort == "" {
 					break
 				}
-				_, err := strconv.Atoi(stringPort)
+				counter, err := strconv.Atoi(stringPort)
 				if err != nil {
 					fmt.Println("<hideNSneak> Invalid Integer - Please check your input")
 					continue
 				}
+				startPort = counter
 				break
 			}
 			fmt.Println("<hideNSneak> Enter a comma seperated list of servers to create SOCKS proxies [Default: all]")
 			instanceString, _ := reader.ReadString('\n')
 			instanceString = strings.TrimSpace(instanceString)
 			if instanceString == "" {
-				proxychains, socksd = cloud.CreateSOCKS(allInstances, startPort)
+				for i := 0; i < len(allInstances); i++ {
+					cloud.CreateSOCKS(allInstances[i], startPort)
+				}
 				config.StartPort = config.StartPort + len(allInstances)
 			} else {
 				instanceArray := strings.Split(instanceString, ",")
-				tempInstances := []*cloud.Instance{}
-				for _, p := range instanceArray {
-					index, _ := strconv.Atoi(p)
-					tempInstances = append(tempInstances, allInstances[index])
+
+				intArray, result := misc.ValidateIntArray(instanceArray)
+				if result == false && instanceArray[0] != "" {
+					fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
+					continue
 				}
-				proxychains, socksd = cloud.CreateSOCKS(tempInstances, config.StartPort)
-				config.StartPort = config.StartPort + len(tempInstances)
+
+				counter := startPort
+				for _, p := range intArray {
+					cloud.CreateSOCKS(allInstances[p], counter)
+					counter++
+				}
+				config.StartPort = counter + 1
 			}
-		case "socksRemove":
+		case "socks-kill":
+			//TODO: Fix Specification problem, All works, but giving it a list doesnt
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Println("<hideNSneak> Servers:")
+			listUI(allInstances)
+			fmt.Println("<hideNSneak> Enter a comma seperated list of servers to remove SOCKS proxies [Default: all]")
+			instanceString, _ := reader.ReadString('\n')
+			instanceString = strings.TrimSpace(instanceString)
+			if instanceString == "" {
+				proxychains, socksd = "", ""
+				cloud.StopAllSOCKS(allInstances)
+				continue
+			}
+
+			instanceArray := strings.Split(instanceString, ",")
+
+			intArray, result := misc.ValidateIntArray(instanceArray)
+			if result == false && instanceArray[0] != "" {
+				fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
+				continue
+			}
+
+			fmt.Println("<hideNSneak> The following server's SOCKS proxies will be killed - Is this ok [y/n]")
+
+			//TODO Overload list UI to take a []int array
+			listUIRange(allInstances, intArray)
+			confirmation, _ := reader.ReadString('\n')
+			confirmation = strings.TrimSpace(confirmation)
+			//TODO: Add ability to specify start
+			if strings.ToLower(string(confirmation[0])) == "y" {
+				for _, i := range intArray {
+					cloud.StartInstance(config, allInstances[i])
+				}
+			}
+			break
+			for _, index := range intArray {
+				cloud.StopSingleSOCKS(allInstances[index])
+			}
 		//TODO Add Socks-remove functionality
 		case "domainFront-create":
 			reader := bufio.NewReader(os.Stdin)
@@ -684,6 +737,12 @@ func main() {
 func listUI(instances []*cloud.Instance) {
 	for num, instance := range instances {
 		fmt.Printf("%d : %s \n", num, instance.String())
+	}
+}
+
+func listUIRange(instances []*cloud.Instance, intArray []int) {
+	for num, int := range intArray {
+		fmt.Printf("%d : %s \n", num, instances[int].String())
 	}
 }
 

@@ -95,12 +95,14 @@ func SplitOnComma(inString string) (outSlice []string) {
 	return
 }
 
-func ValidateIntArray(integers []string) bool {
+func ValidateIntArray(integers []string) ([]int, bool) {
+	var intArray []int
 	for _, p := range integers {
-		_, err := strconv.Atoi(p)
+		q, err := strconv.Atoi(p)
+		intArray = append(intArray, q)
 		if err != nil {
-			return false
+			return intArray, false
 		}
 	}
-	return true
+	return intArray, true
 }
