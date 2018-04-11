@@ -17,9 +17,23 @@ import (
 //Cloud Proxy Tool
 func main() {
 	//TODO: make sure hidneNsneak directory exists, create it if not.
+	subdirectories := []string{"nmap", "cobaltstrike", "gae", "log"}
+
 	usr, _ := user.Current()
 
+	programDir := usr.HomeDir + "/.hideNsneak/"
+
+	createPaths(programDir, subdirectories)
+
 	config := cloud.ParseConfig(usr.HomeDir + "/.hideNsneak/config.yaml")
+
+	os.Chmod(usr.HomeDir+"/.hideNsneak/config.yaml", 0500)
+
+	config.NmapDir = programDir + "nmap/"
+
+	config.CSDir = programDir + "cobaltstrike/"
+
+	config.Google.ProjectDir = programDir + "gae/"
 
 	var allInstances []*cloud.Instance
 	var allDomainFronts []cloud.DomainFront
@@ -87,7 +101,7 @@ func main() {
 			reader := bufio.NewReader(os.Stdin)
 			tempInstances := []*cloud.Instance{}
 			var instanceArray []string
-			listUI(allInstances)
+			listInstances(allInstances)
 
 			for {
 				fmt.Println("<hideNSneak> Enter a comma separated list of servers to destroy [Default: all]")
@@ -124,7 +138,7 @@ func main() {
 			}
 			for {
 				fmt.Println("<hideNSneak> The following servers will be deleted - Is this ok [y/n]")
-				listUI(tempInstances)
+				listInstances(tempInstances)
 				confirmation, _ := reader.ReadString('\n')
 				confirmation = strings.TrimSpace(confirmation)
 				if strings.ToLower(string(confirmation[0])) == "y" {
@@ -158,7 +172,7 @@ func main() {
 			//TODO Speicify which instances to start
 			reader := bufio.NewReader(os.Stdin)
 			var instanceArray []string
-			listUI(allInstances)
+			listInstances(allInstances)
 
 			for {
 				fmt.Println("<hideNSneak> Enter a comma separated list of servers to start [Default: all]")
@@ -173,7 +187,7 @@ func main() {
 					continue
 				}
 				fmt.Println("<hideNSneak> The following servers will be started - Is this ok [y/n]")
-				listUI(allInstances)
+				listInstances(allInstances)
 				confirmation, _ := reader.ReadString('\n')
 				confirmation = strings.TrimSpace(confirmation)
 				//TODO: Add ability to specify start
@@ -188,7 +202,7 @@ func main() {
 		case "stop":
 			reader := bufio.NewReader(os.Stdin)
 			var instanceArray []string
-			listUI(allInstances)
+			listInstances(allInstances)
 
 			for {
 				fmt.Println("<hideNSneak> Enter a comma separated list of servers to stop [Default: all]")
@@ -203,7 +217,7 @@ func main() {
 					continue
 				}
 				fmt.Println("<hideNSneak> The following servers will be stopped - Is this ok [y/n]")
-				listUI(allInstances)
+				listInstances(allInstances)
 				confirmation, _ := reader.ReadString('\n')
 				confirmation = strings.TrimSpace(confirmation)
 				//TODO: Add ability to specify start
@@ -216,7 +230,7 @@ func main() {
 			}
 		case "shell":
 			reader := bufio.NewReader(os.Stdin)
-			listUI(allInstances)
+			listInstances(allInstances)
 			fmt.Println("<hideNSneak> Enter the number of the server you wish drop into: ")
 			instanceNum, _ := reader.ReadString('\n')
 			instanceNum = strings.TrimSpace(instanceNum)
@@ -231,12 +245,12 @@ func main() {
 			sshext.ShellSystem(allInstances[num].Cloud.IPv4, allInstances[num].SSH.Username, allInstances[num].SSH.PrivateKey)
 		case "list":
 			//TODO Add Ability to specify provider
-			listUI(allInstances)
+			listInstances(allInstances)
 		case "socks-add":
 			startPort := config.StartPort
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Println("<hideNSneak> Servers:")
-			listUI(allInstances)
+			listInstances(allInstances)
 			for {
 				fmt.Print("<hideNSneak> Enter the start port for your SOCKS proxies [Default: Config Value]: ")
 				stringPort, _ := reader.ReadString('\n')
@@ -280,7 +294,7 @@ func main() {
 			//TODO: Fix Specification problem, All works, but giving it a list doesnt
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Println("<hideNSneak> Servers:")
-			listUI(allInstances)
+			listInstances(allInstances)
 			fmt.Println("<hideNSneak> Enter a comma seperated list of servers to remove SOCKS proxies [Default: all]")
 			instanceString, _ := reader.ReadString('\n')
 			instanceString = strings.TrimSpace(instanceString)
@@ -301,7 +315,7 @@ func main() {
 			fmt.Println("<hideNSneak> The following server's SOCKS proxies will be killed - Is this ok [y/n]")
 
 			//TODO Overload list UI to take a []int array
-			listUIRange(allInstances, intArray)
+			listInstanceRange(allInstances, intArray)
 			confirmation, _ := reader.ReadString('\n')
 			confirmation = strings.TrimSpace(confirmation)
 			//TODO: Add ability to specify start
@@ -314,22 +328,21 @@ func main() {
 			for _, index := range intArray {
 				cloud.StopSingleSOCKS(allInstances[index])
 			}
-		//TODO Add Socks-remove functionality
-		case "domainFront-create":
+		case "domainfront":
 			reader := bufio.NewReader(os.Stdin)
 			for {
 				fmt.Print("<hideNsneak> Enter the cloud provider you would like to use [Options: Google, AWS]: ")
 				provider, _ := reader.ReadString('\n')
 				provider = strings.TrimSpace(provider)
 				if provider == "" {
-					continue
+					break
 				} else {
 					if provider == "AWS" {
-						fmt.Print("<hideNsneak> Enter the domain name you want your cloudfront distro to point to: ")
+						fmt.Print("<hideNsneak> Enter the domain name you want your cloudfront distro to point to [i.e. google.com]: ")
 						domain, _ := reader.ReadString('\n')
 						domain = strings.TrimSpace(domain)
 
-						fmt.Print("<hideNsneak> Is this correct? [Y/n]: " + domain)
+						fmt.Print("<hideNsneak> Is this correct? " + domain + "[Y/n]: ")
 						confirmation, _ := reader.ReadString('\n')
 						if strings.ToLower(string(confirmation[0])) == "n" {
 							break
@@ -360,7 +373,7 @@ func main() {
 
 						var newProject = false
 
-						fmt.Print("<hideNsneak> Enter the domain name/IP address you want your cloudfront distro to point to: ")
+						fmt.Print("<hideNsneak> Enter the domain name/IP address you want your cloudfront distro to point to [i.e google.com, 8.8.8.8]: ")
 						domain, _ := reader.ReadString('\n')
 						domain = strings.TrimSpace(domain)
 						fmt.Print("<hideNsneak> Would you like to use HTTPS? [y/n]: ")
@@ -387,20 +400,24 @@ func main() {
 						fmt.Print("<hideNsneak> Would you like to restrict access based on User Agent? [y/n]: ")
 						uaConfirmation, _ := reader.ReadString('\n')
 						uaConfirmation = strings.TrimSpace(uaConfirmation)
-						if strings.ToLower(string(uaConfirmation[0])) == "y" {
-							fmt.Print("<hideNsneak> Enter the user agent you would like to restrict on: ")
-							temp, _ := reader.ReadString('\n')
-							userAgent = strings.TrimSuffix(temp, "\n")
+						if string(uaConfirmation) != "" {
+							if strings.ToLower(string(uaConfirmation[0])) == "y" {
+								fmt.Print("<hideNsneak> Enter the user agent you would like to restrict on: ")
+								temp, _ := reader.ReadString('\n')
+								userAgent = strings.TrimSuffix(temp, "\n")
+							}
 						}
 
 						//Restriction Based on Subnet
-						fmt.Print("<hideNsneak> Would you like to restrict access based on Subnet?: ")
+						fmt.Print("<hideNsneak> Would you like to restrict access based on Subnet? [y/n] : ")
 						subnetConfirmation, _ := reader.ReadString('\n')
 						subnetConfirmation = strings.TrimSpace(subnetConfirmation)
-						if strings.ToLower(string(subnetConfirmation[0])) == "y" {
-							fmt.Print("<hideNsneak> Enter the subnet you would like to restrict access to: ")
-							temp, _ := reader.ReadString('\n')
-							subnet = strings.TrimSuffix(temp, "\n")
+						if string(subnetConfirmation) != "" {
+							if strings.ToLower(string(subnetConfirmation[0])) == "y" {
+								fmt.Print("<hideNsneak> Enter the subnet you would like to restrict access to: ")
+								temp, _ := reader.ReadString('\n')
+								subnet = strings.TrimSuffix(temp, "\n")
+							}
 						}
 
 						if strings.ToLower(string(subnetConfirmation[0])) == "y" || strings.ToLower(string(uaConfirmation[0])) == "y" {
@@ -413,8 +430,10 @@ func main() {
 						fmt.Print("<hideNsneak> Is this a new gcloud project? [y/n]: ")
 						projectConfirmation, _ := reader.ReadString('\n')
 						projectConfirmation = strings.TrimSpace(projectConfirmation)
-						if strings.ToLower(string(projectConfirmation[0])) == "y" {
-							newProject = true
+						if string(projectConfirmation) != "" {
+							if strings.ToLower(string(projectConfirmation[0])) == "y" {
+								newProject = true
+							}
 						}
 
 						//Add creation of C2 profiles
@@ -433,6 +452,8 @@ func main() {
 					break
 				}
 			}
+		case "domainfront-list":
+			listFronts(allDomainFronts)
 		case "nmap":
 			//TODO Test Nmap
 			//TODO Add non-evasive scanning
@@ -612,7 +633,7 @@ func main() {
 
 			for {
 				fmt.Println("<hideNSneak> Choose the remote server to send directory to: ")
-				listUI(allInstances)
+				listInstances(allInstances)
 				chosenServerString, _ := reader.ReadString('\n')
 				chosenServerString = strings.TrimSpace(chosenServerString)
 				chosenServer, err = strconv.Atoi(chosenServerString)
@@ -671,7 +692,7 @@ func main() {
 
 			for {
 				fmt.Println("<hideNSneak> Choose the remote server to receive directory/file from: ")
-				listUI(allInstances)
+				listInstances(allInstances)
 				chosenServerString, _ := reader.ReadString('\n')
 				chosenServerString = strings.TrimSpace(chosenServerString)
 				chosenServer, err = strconv.Atoi(chosenServerString)
@@ -734,15 +755,27 @@ func main() {
 
 }
 
-func listUI(instances []*cloud.Instance) {
+func listFronts(fronts []cloud.DomainFront) {
+	for num, front := range fronts {
+		fmt.Printf("%d : %s \n", num, front.String())
+	}
+}
+
+func listFrontRange(fronts []cloud.DomainFront, intArray []int) {
+	for _, index := range intArray {
+		fmt.Printf("%d : %s \n", index, fronts[index].String())
+	}
+}
+
+func listInstances(instances []*cloud.Instance) {
 	for num, instance := range instances {
 		fmt.Printf("%d : %s \n", num, instance.String())
 	}
 }
 
-func listUIRange(instances []*cloud.Instance, intArray []int) {
-	for num, int := range intArray {
-		fmt.Printf("%d : %s \n", num, instances[int].String())
+func listInstanceRange(instances []*cloud.Instance, intArray []int) {
+	for _, index := range intArray {
+		fmt.Printf("%d : %s \n", index, instances[index].String())
 	}
 }
 
@@ -754,6 +787,18 @@ func providerCheck(providerArray []string) bool {
 		}
 	}
 	return true
+}
+
+func createPaths(programDir string, subdirs []string) {
+	if _, err := os.Stat(programDir); os.IsNotExist(err) {
+		os.Mkdir(programDir, 0700)
+	}
+	for _, subdir := range subdirs {
+		if _, err := os.Stat(programDir + "/" + subdir); os.IsNotExist(err) {
+			os.Mkdir(programDir+"/"+subdir, 0700)
+		}
+	}
+
 }
 
 // 2. Finish Security Groups and Firewalls for DO/AWS

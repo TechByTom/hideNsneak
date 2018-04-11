@@ -1,4 +1,4 @@
-package google
+package cobaltstrike
 
 import (
 	"fmt"

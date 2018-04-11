@@ -133,6 +133,7 @@ type DomainFront struct {
 	Target             string
 	ID                 string
 	ETag               string
+	Status             string
 	DistributionConfig *cloudfront.DistributionConfig
 }
 
@@ -150,8 +151,14 @@ func ParseConfig(configFile string) *Config {
 }
 
 //String() prints generic information for the user
+func (front DomainFront) String() string {
+	return fmt.Sprintf("Type: %s | URL: %s | Target: %s",
+		front.Type, front.Host, front.Target)
+}
+
+//String() prints generic information for the user
 func (instance Instance) String() string {
-	socksPort := ""
+	socksPort := "N/A"
 	nmapActive := "N"
 	if instance.Proxy.SOCKSActive {
 		socksPort = instance.Proxy.SOCKSPort
@@ -348,6 +355,8 @@ func StopInstance(config *Config, instance *Instance) {
 
 }
 
+func UpdateInstances(config *Config, instance []*Instance) {}
+
 func Initialize(allInstances []*Instance, config *Config) {
 	for _, instance := range allInstances {
 		instance.SSH.PrivateKey = strings.Split(config.PublicKey, ".pub")[0]
@@ -536,6 +545,9 @@ func CreateFirewall(instances []*Instance, config Config, ports []int, groupName
 	// }
 
 }
+
+//UpdateDomainFront() will check the state of the current domain fronts.
+func UpdateDomainFront() {}
 
 //CreateCloudfront is a runner function for the creation of amazon cloudfront
 func CreateCloudfront(config *Config, domain string) DomainFront {

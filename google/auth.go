@@ -143,7 +143,7 @@ func (auth *Authentication) CachePath() (string, error) {
 		}
 
 		// Get the hidden credentials directory, making sure it's created
-		cacheDir := filepath.Join(usr.HomeDir, ".hideNsneak")
+		cacheDir := filepath.Join(usr.HomeDir, ".hideNsneak/auth")
 		os.MkdirAll(cacheDir, 0700)
 
 		// Determine the path to the token cache file
@@ -176,6 +176,7 @@ func (auth *Authentication) Load(path string) error {
 	if err != nil {
 		return fmt.Errorf("could not open cache file at %s: %v", path, err)
 	}
+	os.Chmod(path, 0500)
 	defer f.Close()
 
 	// Decode the JSON token cache

@@ -3,6 +3,7 @@ package misc
 import (
 	"log"
 	"os"
+	"os/user"
 	"strconv"
 	"strings"
 	"time"
@@ -22,8 +23,10 @@ func Exists(path string) (bool, error) {
 
 //misc.WriteActivityLog writes general activity to log file
 func WriteActivityLog(text string) {
-	//TODO Finalize a path for the activity log
-	f, err := os.OpenFile("/tmp/hideNsneak/activity.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	usr, _ := user.Current()
+
+	logDir := usr.HomeDir + "/.hideNsneak/log/"
+	f, err := os.OpenFile(logDir+"activity.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		log.Printf("Error opening activity log file, no log will be written: %s", err)
 	}
@@ -37,8 +40,11 @@ func WriteActivityLog(text string) {
 
 //misc.WriteErrorLog writes application errors to log file
 func WriteErrorLog(text string) bool {
-	//TODO Finalize a path for the error log
-	f, err := os.OpenFile("/tmp/hideNsneak/error.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	usr, _ := user.Current()
+
+	logDir := usr.HomeDir + "/.hideNsneak/log/"
+
+	f, err := os.OpenFile(logDir+"error.log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		log.Printf("Error opening error log file, no log will be written: %s \n", err)
 		return false
