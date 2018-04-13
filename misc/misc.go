@@ -2,6 +2,7 @@ package misc
 
 import (
 	"log"
+	"net"
 	"os"
 	"os/user"
 	"strconv"
@@ -111,4 +112,16 @@ func ValidateIntArray(integers []string) ([]int, bool) {
 		}
 	}
 	return intArray, true
+}
+
+func ValidateIPArray(ips []string) bool {
+
+	for _, ip := range ips {
+		if _, _, err := net.ParseCIDR(ip); err != nil {
+			if result := net.ParseIP(ip); result == nil {
+				return false
+			}
+		}
+	}
+	return true
 }

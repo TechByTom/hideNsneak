@@ -117,14 +117,12 @@ type Instance struct {
 	}
 }
 
-//RegionalFirewall is a struct
-//WHAT DOES THIS DO?
-type RegionalFirewall struct {
-	RegionPortMap map[string](map[string][]int)
-}
-
 type Firewall struct {
-	FirewallType map[string]RegionalFirewall
+	Type  string
+	Ports []int
+	IPs   []string
+	ID    string
+	Name  string
 }
 
 type DomainFront struct {
@@ -154,6 +152,15 @@ func ParseConfig(configFile string) *Config {
 func (front DomainFront) String() string {
 	return fmt.Sprintf("Type: %s | URL: %s | Target: %s",
 		front.Type, front.Host, front.Target)
+}
+
+func (firewall Firewall) String() string {
+	var ports []string
+	for _, port := range firewall.Ports {
+		ports = append(ports, strconv.Itoa(port))
+	}
+	return fmt.Sprintf("Name: %s | Type: %s | Source IPs: %s | Ports: %s",
+		firewall.Name, firewall.Type, strings.Join(firewall.IPs, ","), strings.Join(ports, ","))
 }
 
 //String() prints generic information for the user
@@ -521,28 +528,51 @@ func ImportNmaps(localDir string, insecureSSL bool, limitHosts bool, forcePorts 
 	}
 }
 
-func CreateFirewall(instances []*Instance, config Config, ports []int, groupName string, desc string) {
-	firewall := RegionalFirewall{}
-	for _, instance := range instances {
-		switch instance.Cloud.Type {
-		case "AWS":
-			firewall.RegionPortMap["AWS"][instance.Cloud.IPv4] = ports
-		case "DO":
-			firewall.RegionPortMap["DO"][instance.Cloud.IPv4] = ports
-		case "Google":
-			firewall.RegionPortMap["Google"][instance.Cloud.IPv4] = ports
-		case "Azure":
-			firewall.RegionPortMap["Azure"][instance.Cloud.IPv4] = ports
-		default:
-			fmt.Println("Unknown instance type, skpping")
+func CreateFirewall(instance *Instance, config *Config, ips []string, ports []int, name string, desc string) (Firewall, error) {
+	var firewall Firewall
+	switch instance.Cloud.Type {
+	case "AWS":
+		firewallID, err := amazon.CreateSecurityGroup(name, desc, ips, ports, instance.Cloud.Region, config.AWS.Secret, config.AWS.AccessID)
+
+		if err != nil {
+			return firewall, err
 		}
+
+		firewall.ID = firewallID
+		firewall.Ports = ports
+		firewall.IPs = ips
+		firewall.Name = name
+		firewall.Type = instance.Cloud.Type
+
+	case "DO":
+
+		firewallID, err := do.CreateDOFirewall(config.DO.Token, name, ips, ports)
+		if err != nil {
+			return firewall, err
+		}
+		firewall.ID = firewallID
+		firewall.Ports = ports
+		firewall.IPs = ips
+		firewall.Name = name
+		firewall.Type = instance.Cloud.Type
+
+		instanceID, _ := strconv.Atoi(instance.Cloud.ID)
+
+		err = do.SetDOFirewall(firewall.ID, config.DO.Token, instanceID)
+		if err != nil {
+			log.Println("Error setting the DO firewall to instance")
+		}
+
+	case "Google":
+
+	case "Azure":
+	default:
+		fmt.Println("Unknown instance type, skpping")
 	}
-	//Don't know what this is used for
-	// for _, firewallType := range firewall.RegionPortMap {
-	// 	switch firewallType {
-	// 	case "AWS":
-	// 	}
-	// }
+	return firewall, nil
+}
+
+func DeleteFirewall() {
 
 }
 
@@ -577,4 +607,28 @@ func CreateGoogleDomainFront(config *Config, domain string, keystore string, key
 		return url
 	}
 	return ""
+}
+
+func PrintProxychains(instances []*Instance) string {
+	var result string
+	for _, instance := range instances {
+		if instance.Proxy.SOCKSActive {
+			result = "socks5 127.0.0.1 " + instance.Proxy.SOCKSPort
+		}
+	}
+	return result
+}
+
+func PrintSocksd(instances []*Instance) string {
+	var temp string
+	for _, instance := range instances {
+		if instance.Proxy.SOCKSActive {
+			temp = temp + `{"type": "socks5", "address": "127.0.0.1:` + instance.Proxy.SOCKSPort + `"},`
+		}
+	}
+	temp = temp[:len(temp)-1]
+	result := `"upstreams": [
+` + temp + `
+]`
+	return result
 }

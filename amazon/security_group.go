@@ -41,19 +41,13 @@ func describeInstanceSecurityGroup(region string, ip string, secret string, acce
 
 //Create Security Group
 //TODO: Allow option for UDP port speicification
-func createSecurityGroup(securityGroup string, desc string, ipPortMap map[string][]int, region string, secret string, accessID string) string {
+func CreateSecurityGroup(securityGroup string, desc string, ips []string, ports []int, region string, secret string, accessID string) (string, error) {
 	svc := createEC2Session(region, secret, accessID)
 	createRes, err := svc.CreateSecurityGroup(&ec2.CreateSecurityGroupInput{
 		GroupName:   aws.String(securityGroup),
 		Description: aws.String(desc),
 	})
-	//What was I doing here
-	// if val, ok := region; ok {
-	// 	//Make change to this later
-	// 	// config.AWS.SecurityGroups[region] = append(val, *createRes.GroupId)
-	// } else {
-	// 	config.AWS.SecurityGroups[region] = strings.Split(*createRes.GroupId, "AHUIGFDKJS")
-	// }
+
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -62,6 +56,7 @@ func createSecurityGroup(securityGroup string, desc string, ipPortMap map[string
 			}
 		}
 		log.Printf("Unable to create security group %q, %v", securityGroup, err)
+		return "", err
 	}
 
 	//TODO: implement more robust check to see if they want to restrict ssh to their own IP, note
@@ -77,39 +72,32 @@ func createSecurityGroup(securityGroup string, desc string, ipPortMap map[string
 			}),
 	}
 
-	if len(ipPortMap) > 0 {
-		for ip, ports := range ipPortMap {
-			for port := range ports {
-				ec2Permissions = append(ec2Permissions, (&ec2.IpPermission{}).
-					SetIpProtocol("tcp").
-					SetFromPort(int64(port)).
-					SetToPort(int64(port)).
-					SetIpRanges([]*ec2.IpRange{
-						{CidrIp: aws.String(ip)},
-					}),
-				)
-			}
-		}
+	var ipRanges []*ec2.IpRange
+	for _, ip := range ips {
+		ipRanges = append(ipRanges, &ec2.IpRange{
+			CidrIp: aws.String(ip),
+		})
+	}
+
+	for port := range ports {
+		ec2Permissions = append(ec2Permissions, (&ec2.IpPermission{}).
+			SetIpProtocol("tcp").
+			SetFromPort(int64(port)).
+			SetToPort(int64(port)).
+			SetIpRanges(ipRanges),
+		)
 	}
 	// fmt.Printf("Created security group %s with VPC %s.\n", aws.StringValue(createRes.GroupId), instance.Cloud.ID)
 	_, err = svc.AuthorizeSecurityGroupIngress(&ec2.AuthorizeSecurityGroupIngressInput{
-		GroupName: aws.String(securityGroup),
-		IpPermissions: []*ec2.IpPermission{
-			(&ec2.IpPermission{}).
-				SetIpProtocol("tcp").
-				SetFromPort(22).
-				SetToPort(22).
-				SetIpRanges([]*ec2.IpRange{
-					(&ec2.IpRange{}).
-						SetCidrIp("0.0.0.0/0"),
-				}),
-		},
+		GroupName:     aws.String(securityGroup),
+		IpPermissions: ec2Permissions,
 	})
 	if err != nil {
 		log.Printf("Unable to set security group %q ingress, %v", securityGroup, err)
+		return "", err
 	}
 	fmt.Println("Successfully set security group ingress")
-	return *createRes.GroupId
+	return *createRes.GroupId, nil
 }
 
 //TODO: Delete security group from instances
