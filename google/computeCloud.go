@@ -3,7 +3,6 @@ package google
 import (
 	"fmt"
 	"math/rand"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -169,24 +168,10 @@ func createInboundRule(project string, ruleName string, protocol string, port st
 }
 
 func deleteInboundRule(project string, ruleName string) bool {
-	cmd := exec.Command("gcloud", "compute", "firewall-rules", "delete", ruleName)
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("Error create firewall rule: %s", err)
-		return false
-	}
-	//Log successful import of ssh key
 	return true
 }
 
 func describeRules(project string) bool {
-	cmd := exec.Command("gcloud", "compute", "firewall-rules", "describe")
-	err := cmd.Run()
-	if err != nil {
-		fmt.Printf("Error describe firewall rules: %s", err)
-		return false
-	}
-	//Log successful import of ssh key
 	return true
 }
 

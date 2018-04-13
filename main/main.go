@@ -37,8 +37,8 @@ func main() {
 
 	var allInstances []*cloud.Instance
 	var allDomainFronts []cloud.DomainFront
-	// var terminationMap map[string][]string
-	var proxychains, socksd string
+	var allFirewalls []cloud.Firewall
+
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("<hideNsneak> ")
@@ -187,7 +187,7 @@ func main() {
 					continue
 				}
 				fmt.Println("<hideNSneak> The following servers will be started - Is this ok [y/n]")
-				listInstances(allInstances)
+				listInstanceRange(allInstances, intArray)
 				confirmation, _ := reader.ReadString('\n')
 				confirmation = strings.TrimSpace(confirmation)
 				//TODO: Add ability to specify start
@@ -217,7 +217,7 @@ func main() {
 					continue
 				}
 				fmt.Println("<hideNSneak> The following servers will be stopped - Is this ok [y/n]")
-				listInstances(allInstances)
+				listInstanceRange(allInstances, intArray)
 				confirmation, _ := reader.ReadString('\n')
 				confirmation = strings.TrimSpace(confirmation)
 				//TODO: Add ability to specify start
@@ -299,7 +299,6 @@ func main() {
 			instanceString, _ := reader.ReadString('\n')
 			instanceString = strings.TrimSpace(instanceString)
 			if instanceString == "" {
-				proxychains, socksd = "", ""
 				cloud.StopAllSOCKS(allInstances)
 				continue
 			}
@@ -621,9 +620,9 @@ func main() {
 			//TODO: Update Termination Map
 		case "proxyconf":
 			fmt.Println("Proxychains:")
-			fmt.Println(proxychains)
+			fmt.Println(cloud.PrintProxychains(allInstances))
 			fmt.Println("Socksd:")
-			fmt.Println(socksd)
+			fmt.Println(cloud.PrintSocksd(allInstances))
 		case "send":
 			var err error
 			reader := bufio.NewReader(os.Stdin)
@@ -740,8 +739,76 @@ func main() {
 
 				break
 			}
+
 		case "firewall":
-		//TODO add firewall support
+			var instanceArray []string
+			var instanceIndexes []int
+			var ports []int
+			var result bool
+			var ipArray []string
+			listInstances(allInstances)
+			for {
+				fmt.Print("<hideNSneak> Enter a comma separated list of servers to apply firewall rules to: ")
+				instanceString, _ := reader.ReadString('\n')
+				instanceString = strings.TrimSpace(instanceString)
+
+				instanceArray = strings.Split(instanceString, ",")
+
+				instanceIndexes, result = misc.ValidateIntArray(instanceArray)
+
+				if result == false && instanceArray[0] != "" {
+					fmt.Println("<hideNSneak> Server specification contains non-integers, try again")
+					continue
+				}
+				break
+			}
+			for {
+				fmt.Print("<hideNSneak> Enter a comma separated list of ports to allow inbound: ")
+				portString, _ := reader.ReadString('\n')
+				portString = strings.TrimSpace(portString)
+
+				portArray := strings.Split(portString, ",")
+
+				ports, result = misc.ValidateIntArray(portArray)
+
+				if result == false {
+					fmt.Println("<hideNSneak> Port specification contains non-integers, try again")
+					continue
+				}
+				break
+			}
+			for {
+				fmt.Print("<hideNSneak> Enter a comma separated list of IPv4 IPs/Subnets to allow inbound: ")
+				ipString, _ := reader.ReadString('\n')
+				ipString = strings.TrimSpace(ipString)
+
+				ipArray = strings.Split(ipString, ",")
+
+				result := misc.ValidateIPArray(ipArray)
+
+				if result == false {
+					fmt.Println("<hideNSneak> Port specification contains non-integers, try again")
+					continue
+				}
+				break
+			}
+
+			fmt.Print("<hideNSneak> Enter the name for the firewall:  ")
+			name, _ := reader.ReadString('\n')
+			name = strings.TrimSpace(name)
+
+			for _, index := range instanceIndexes {
+				firewall, err := cloud.CreateFirewall(allInstances[index], config, ipArray, ports, name, "")
+				if err != nil {
+					fmt.Printf("Firewall not created %s", err)
+				} else {
+					allFirewalls = append(allFirewalls, firewall)
+				}
+			}
+		case "firewall-list":
+			for _, firewall := range allFirewalls {
+				fmt.Println(firewall.String())
+			}
 		case "quit":
 			fmt.Println("<hideNsneak> Shutting Down")
 			os.Exit(1)

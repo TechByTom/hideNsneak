@@ -14,24 +14,23 @@ import (
 
 //Create Firewall
 //TODO: Allow option for UDP port speicification
-func createDOFirewall(token string, firewallName string, ipPortMap map[string][]int) string {
+func CreateDOFirewall(token string, firewallName string, ips []string, ports []int) (string, error) {
 	client := newDOClient(token)
 	firewall := client.Firewalls
 
 	var inbboundRules []godo.InboundRule
 	var sources godo.Sources
-	for ip, ports := range ipPortMap {
-		sources = godo.Sources{
-			Addresses: []string{ip},
-		}
-		for port := range ports {
-			portString := strconv.Itoa(port)
-			inbboundRules = append(inbboundRules, godo.InboundRule{
-				Protocol:  "tcp",
-				PortRange: portString,
-				Sources:   &sources,
-			})
-		}
+	sources = godo.Sources{
+		Addresses: ips,
+	}
+	for _, port := range ports {
+
+		portString := strconv.Itoa(port)
+		inbboundRules = append(inbboundRules, godo.InboundRule{
+			Protocol:  "tcp",
+			PortRange: portString,
+			Sources:   &sources,
+		})
 	}
 	newFirewall, _, err := firewall.Create(context.TODO(), &godo.FirewallRequest{
 		Name:         firewallName,
@@ -39,8 +38,9 @@ func createDOFirewall(token string, firewallName string, ipPortMap map[string][]
 	})
 	if err != nil {
 		log.Println("Error encountered creating DO Firewall")
+		return "", err
 	}
-	return newFirewall.ID
+	return newFirewall.ID, err
 }
 
 //Delete Firewall
@@ -85,10 +85,12 @@ func listFirewallByDroplet(token string, id int) []godo.Firewall {
 // }
 
 //Change firewall belonging to instance
-func setDOFirewall(fwID string, token string, id int) {
+func SetDOFirewall(fwID string, token string, id int) error {
 	client := newDOClient(token)
 	_, err := client.Firewalls.AddDroplets(context.TODO(), fwID, id)
 	if err != nil {
 		log.Println("Error setting the DO firewall to instance")
+		return err
 	}
+	return nil
 }
