@@ -174,7 +174,6 @@ func main() {
 					}
 
 					tempInstances = append(tempInstances, allInstances[index])
-					//TODO: Fix this logic on deletion, newInstanceList should properly reflect removal of certain assets
 				}
 			} else {
 				tempInstances = allInstances
@@ -200,6 +199,7 @@ func main() {
 								allInstances = append(allInstances[:index], allInstances[index+1:]...)
 							}
 						} else {
+							//todo: this is where its fuckin up
 							allInstances = allInstances[:index]
 						}
 					}
